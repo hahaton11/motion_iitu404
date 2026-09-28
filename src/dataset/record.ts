@@ -17,7 +17,7 @@ const root = document.getElementById('app')
 if (!root) throw new Error('record.html needs #app')
 const video = Object.assign(el('video'), { muted: true, playsInline: true })
 const canvas = el('canvas')
-const overlay = el('div', 'rec-overlay', 'Нажми «Начать»')
+const overlay = el('div', 'rec-overlay', 'Включаю камеру…')
 const stage = el('div', 'rec-stage')
 stage.append(video, canvas, overlay)
 const phaseEl = el('div', 'rec-phase', 'Подготовка')
@@ -28,7 +28,7 @@ const fill = el('div')
 bar.append(fill)
 const card = el('div', 'rec-card')
 card.append(phaseEl, titleEl, instrEl, bar)
-const startBtn = el('button', 'rec-btn', 'Начать')
+const startBtn = el('button', 'rec-btn', 'Включаю камеру…')
 const saveBtn = el('button', 'rec-btn', 'Скачать датасет')
 saveBtn.disabled = true
 const counts = el('div', 'rec-counts')
@@ -95,17 +95,34 @@ input.onFrame((info) => {
   if (samples.length % 30 === 0) renderCounts()
 })
 
-startBtn.addEventListener('click', () => {
+let cameraReady = false
+
+/** Камера включается сразу при открытии, чтобы было видно, что рука в кадре. Ошибка — крупно на экране. */
+function startCamera(): void {
+  overlay.textContent = 'Включаю камеру…'
   startBtn.disabled = true
   input
     .start()
     .then(() => {
-      phase = start(performance.now())
-    })
-    .catch((err: unknown) => {
-      overlay.textContent = err instanceof Error ? err.message : 'Камера недоступна'
+      cameraReady = true
+      overlay.textContent = 'Камера работает. Нажми «Начать»'
+      startBtn.textContent = 'Начать'
       startBtn.disabled = false
     })
+    .catch((err: unknown) => {
+      const text = err instanceof Error ? err.message : 'Камера недоступна'
+      overlay.textContent = text
+      titleEl.textContent = 'Камера не включилась'
+      instrEl.textContent = `${text}. Закрой другие вкладки с localhost:5173 и приложения с камерой, затем нажми «Включить камеру»`
+      startBtn.textContent = 'Включить камеру'
+      startBtn.disabled = false
+    })
+}
+
+startBtn.addEventListener('click', () => {
+  if (!cameraReady) return startCamera()
+  startBtn.disabled = true
+  phase = start(performance.now())
 })
 
 saveBtn.addEventListener('click', () => {
@@ -117,3 +134,4 @@ saveBtn.addEventListener('click', () => {
 })
 
 renderCounts()
+startCamera()

@@ -68,6 +68,9 @@ buttons.start.addEventListener('click', async () => {
   }
 })
 
+// Камера включается сразу: доступ на localhost уже выдан, кнопка остаётся для повторной попытки.
+buttons.start.click()
+
 buttons.calibrate.addEventListener('click', async () => {
   buttons.calibrate.disabled = true
   try {

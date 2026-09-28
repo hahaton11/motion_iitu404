@@ -1,7 +1,7 @@
 import type { HandId } from '../contracts/input'
 import type { HandState } from './controller'
 
-/** Прицел уменьшается при сжатии кулака: scale(1 - closure * CLOSURE_SHRINK). */
+/** Прицел уменьшается по мере смыкания щипка: scale(1 - closure * CLOSURE_SHRINK). */
 export const CLOSURE_SHRINK = 0.4
 
 /**
@@ -51,5 +51,7 @@ export class CursorLayer {
     // Элемент в фокусе подсвечивается сам, прицел над ним почти исчезает, чтобы не мешать.
     dot.classList.toggle('is-focus', !holding && h.hoverId !== undefined)
     dot.classList.toggle('is-over', !holding && h.hoverAction !== undefined)
+    // Сцеп выключен: пустое кольцо показывает, что рука сейчас не ведёт курсор.
+    dot.classList.toggle('is-idle', !holding && h.engaged === false)
   }
 }

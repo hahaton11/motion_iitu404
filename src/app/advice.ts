@@ -8,8 +8,8 @@ export interface HintInfo {
 }
 
 const INFO: Readonly<Record<string, HintInfo>> = {
-  HALF_GRAB: { label: 'Кулак сжат не до конца', advice: 'Сжимай кулак полностью, прижимая все пальцы к ладони', icon: 'fist' },
-  HALF_RELEASE: { label: 'Ладонь раскрыта не до конца', advice: 'Раскрывай ладонь широко, разводя пальцы', icon: 'palm' },
+  HALF_GRAB: { label: 'Щипок не сомкнут до конца', advice: 'Своди кончики большого и указательного до касания', icon: 'fist' },
+  HALF_RELEASE: { label: 'Щипок разжат не до конца', advice: 'Разводи большой и указательный широко, чтобы отпустить', icon: 'palm' },
   HAND_NEAR_EDGE: { label: 'Рука у края кадра', advice: 'Держи руку ближе к центру кадра, на уровне груди', icon: 'hand' },
   TOO_FAR: { label: 'Слишком далеко от камеры', advice: 'Встань на шаг ближе, чтобы ладонь была крупнее в кадре', icon: 'hand' },
   TOO_CLOSE: { label: 'Слишком близко к камере', advice: 'Отойди на шаг назад, чтобы рука целиком помещалась в кадр', icon: 'hand' },
@@ -17,12 +17,12 @@ const INFO: Readonly<Record<string, HintInfo>> = {
   POOR_TRACKING: { label: 'Камере не хватало света', advice: 'Повернись лицом к окну или лампе, свет должен падать на руку', icon: 'light' },
   NO_HAND: { label: 'Рука пропадала из кадра', advice: 'Держи руку перед камерой ладонью к экрану всё время игры', icon: 'hand' },
   BOARD_RELEASE_EDGE: { label: 'Отпускание за краем доски', advice: 'Отпускай элементы над доской, не доводя руку до края экрана', icon: 'palm' },
-  BOARD_TOOLBAR_POINT: { label: 'Кулак на кнопке плашки', advice: 'Кнопки плашки выбираются указательным пальцем с задержкой', icon: 'point' },
+  BOARD_TOOLBAR_POINT: { label: 'Щипок на кнопке плашки', advice: 'Кнопки плашки выбираются жестом «V» с задержкой', icon: 'point' },
   BOARD_ZOOM_MAX: { label: 'Упор в максимальный зум', advice: 'Сводя руки, ты отдаляешь доску, разводя — приближаешь', icon: 'fist' },
   BOARD_ZOOM_MIN: { label: 'Упор в минимальный зум', advice: 'Сводя руки, ты отдаляешь доску, разводя — приближаешь', icon: 'fist' },
   POCKET_NEAR: { label: 'Элемент не донесён до кармана', advice: 'Опускай элемент до самой полосы кармана внизу экрана', icon: 'pocket' },
-  POCKET_HOVER_SHORT: { label: 'Карман не успел открыться', advice: 'Держи открытую ладонь над карманом почти полсекунды', icon: 'pocket' },
-  POCKET_STUCK: { label: 'Пальцы не разжались над карманом', advice: 'Над карманом раскрывай ладонь полностью', icon: 'palm' },
+  POCKET_HOVER_SHORT: { label: 'Карман не успел открыться', advice: 'Держи курсор над карманом почти полсекунды', icon: 'pocket' },
+  POCKET_STUCK: { label: 'Щипок не разжался над карманом', advice: 'Над карманом разводи большой и указательный полностью', icon: 'palm' },
   VOICE_UNSUPPORTED: { label: 'Голос недоступен в браузере', advice: 'Открой приложение в Chrome, чтобы диктовать стикеры', icon: 'voice' },
   VOICE_DENIED: { label: 'Нет доступа к микрофону', advice: 'Разреши микрофон в адресной строке браузера', icon: 'voice' },
   VOICE_NO_SPEECH: { label: 'Голос не расслышан', advice: 'Говори громче и сразу после появления плашки «Говори»', icon: 'voice' },

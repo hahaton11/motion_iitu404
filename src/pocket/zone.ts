@@ -40,7 +40,7 @@ export const POCKET_HINTS = {
   },
   STUCK: {
     code: 'POCKET_STUCK',
-    message: 'Разожми пальцы над карманом, чтобы положить элемент',
+    message: 'Разведи большой и указательный над карманом, чтобы положить элемент',
     severity: 'warn',
   },
 } as const satisfies Record<string, HintEvt>

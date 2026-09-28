@@ -185,7 +185,7 @@ function isolate(panel: HTMLElement): void {
 
 function seed(board: Board): void {
   const items: NewElement[] = [
-    { kind: 'sticky', x: -260, y: -120, text: 'Возьми меня кулаком', rotation: -3 },
+    { kind: 'sticky', x: -260, y: -120, text: 'Возьми меня щипком', rotation: -3 },
     { kind: 'sticky', x: -40, y: -150, text: 'Брось резко — улечу', color: PALETTE.sticky[1], rotation: 2 },
     { kind: 'rect', x: 260, y: -110 },
     { kind: 'circle', x: -220, y: 150 },

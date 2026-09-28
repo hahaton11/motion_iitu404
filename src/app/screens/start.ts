@@ -7,12 +7,12 @@ import type { InputMode } from '../flow'
 const STATUS_TEXT: Readonly<Record<CameraStatus['phase'], string>> = {
   off: 'Камера выключена',
   loading: 'Включаю камеру и загружаю распознавание рук…',
-  ready: 'Камера готова: подними ладонь и задержи её на кнопке',
+  ready: 'Камера готова: вытяни указательный, наведи курсор на кнопку и задержи',
   failed: '',
 }
 
 export const MOUSE_HELP =
-  'Мышь вместо рук: зажми левую кнопку — кулак, отпусти — ладонь, резкий бросок — удалить, Shift и удержание — указать пальцем'
+  'Мышь вместо рук: зажми левую кнопку — щипок, отпусти — разжать, резкий бросок — удалить, Shift и удержание — жест «V»'
 
 function modeSwitch(ctx: AppContext, onChange: () => void): { node: HTMLElement; sync: () => void } {
   const make = (mode: InputMode, label: string) =>
@@ -64,7 +64,7 @@ export function mountStart(ctx: AppContext): ScreenHandle {
     el('h1', 'app-logo', 'Motion ', text('b', '', 'Board')),
     text('p', 'app-lead', 'Доска для брейншторма, которой управляют руками перед веб-камерой, как голограммой'),
     start,
-    text('p', 'app-caption', 'Нажми или задержи открытую ладонь на кнопке одну секунду'),
+    text('p', 'app-caption', 'Нажми или задержи курсор на кнопке одну секунду'),
     status,
     el('div', 'app-row', switcher.node, free),
   )

@@ -31,7 +31,7 @@ const div = (className: string, text = ''): HTMLElement =>
 
 function labelFor(m: PocketViewModel): string {
   if (m.armed) return 'Отпусти — и элемент в кармане'
-  if (m.open) return m.count ? 'Сожми кулак над карточкой, чтобы достать' : 'Карман пуст, положи сюда элемент'
+  if (m.open) return m.count ? 'Сомкни щипок над карточкой, чтобы достать' : 'Карман пуст, положи сюда элемент'
   if (m.near) return 'Ниже, к карману'
   return 'Задержи руку, чтобы открыть'
 }

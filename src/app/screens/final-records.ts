@@ -73,7 +73,7 @@ export function recordsBlock(ctx: AppContext, record: GameRecord): RecordsBlock 
     'div',
     'app-records',
     text('h3', 'app-sub', `Рекорды · ${rankText}`),
-    ...(canPick ? [text('p', 'app-caption', 'Как тебя записать? Выбери прозвище ладонью или скажи имя')] : []),
+    ...(canPick ? [text('p', 'app-caption', 'Как тебя записать? Выбери прозвище курсором или скажи имя')] : []),
     picker,
     status,
     tableSlot,

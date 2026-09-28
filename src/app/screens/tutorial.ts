@@ -15,7 +15,7 @@ import {
 import { addDecor, createWorkspace, ensurePresets, type Workspace } from '../workspace'
 import { centerIn } from '../zones'
 
-/** Обучение: четыре шага на настоящей доске с карманом. Карточка шага сверху, шаг пропускается ладонью. */
+/** Обучение: четыре шага на настоящей доске с карманом. Карточка шага сверху, шаг пропускается кнопкой. */
 
 const RESPAWN_MS = 650
 const FINISH_MS = 1400

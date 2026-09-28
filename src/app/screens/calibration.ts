@@ -2,7 +2,7 @@ import { CALIBRATION_PROMPTS, type CalibrationProgress } from '../../motion'
 import type { AppContext, ScreenHandle } from '../context'
 import { el, icon, isolate, text } from '../dom'
 
-/** Калибровка: два шага S1 (ладонь, кулак) с анимированной рукой и полосой прогресса. */
+/** Калибровка щипка: пальцы разведены, затем сомкнуты, с анимированной рукой и полосой прогресса. */
 
 const DONE_DELAY_MS = 1100
 
@@ -17,7 +17,7 @@ export function mountCalibration(ctx: AppContext): ScreenHandle {
   const hand = el('div', 'app-calib-hand', icon('palm', 'app-calib-palm'), icon('fist', 'app-calib-fist'))
   const prompt = text('h2', 'app-title', CALIBRATION_PROMPTS.open)
   const bar = el('div', 'app-bar', el('div', 'app-bar-fill'))
-  const steps = el('ol', 'app-steps', text('li', 'is-open', 'Ладонь'), text('li', 'is-fist', 'Кулак'))
+  const steps = el('ol', 'app-steps', text('li', 'is-open', 'Пальцы врозь'), text('li', 'is-fist', 'Щипок'))
   const note = text('p', 'app-caption', 'Держи руку перед камерой, пока полоса не заполнится. Это подстроит жесты под твою руку')
   const retry = ctx.buttons.create({ label: 'Повторить', icon: 'palm', onPress: () => run() })
   const skip = ctx.buttons.create({ label: 'Пропустить', variant: 'ghost', onPress: () => ctx.send({ type: 'skipCalibration' }) })

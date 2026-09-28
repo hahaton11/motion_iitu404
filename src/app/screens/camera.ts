@@ -25,7 +25,7 @@ export function mountCamera(ctx: AppContext): ScreenHandle {
   const mountedAt = performance.now()
   const title = el('h2', 'app-title')
   const status = el('p', 'app-status')
-  const seen = el('div', 'app-seen', icon('palm'), text('span', '', 'Подними руку в кадр ладонью к экрану'))
+  const seen = el('div', 'app-seen', icon('palm'), text('span', '', 'Подними руку в кадр ладонью к экрану, чуть ниже лица'))
   const tip = el('p', 'app-tip')
   const next = ctx.buttons.create({ label: 'Дальше', icon: 'palm', onPress: () => ctx.send({ type: 'cameraReady' }) })
   const mouse = ctx.buttons.create({
@@ -51,7 +51,7 @@ export function mountCamera(ctx: AppContext): ScreenHandle {
     seen.classList.toggle('is-on', visible)
     seen.hidden = cam.phase !== 'ready'
     const label = seen.querySelector('span')
-    if (label) label.textContent = visible ? 'Вижу руку' : 'Подними руку в кадр ладонью к экрану'
+    if (label) label.textContent = visible ? 'Вижу руку' : 'Подними руку в кадр ладонью к экрану, чуть ниже лица'
     next.disabled = !visible
     mouse.classList.toggle('is-primary', cam.phase === 'failed')
     mouse.classList.toggle('is-ghost', cam.phase !== 'failed')

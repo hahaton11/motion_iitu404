@@ -27,7 +27,7 @@ export const BOARD_HINTS = {
   RELEASE_EDGE: { code: 'BOARD_RELEASE_EDGE', message: 'Отпусти элемент над доской, а не за её краем', severity: 'warn' },
   TOOLBAR_POINT: {
     code: 'BOARD_TOOLBAR_POINT',
-    message: 'Укажи на кнопку одним пальцем и задержи руку, чтобы выбрать действие',
+    message: 'Покажи «V» над кнопкой и задержи руку, чтобы выбрать действие',
     severity: 'info',
   },
   ZOOM_MAX: { code: 'BOARD_ZOOM_MAX', message: 'Сведи руки, чтобы отдалить доску', severity: 'info' },
@@ -41,6 +41,8 @@ export interface HandState {
   readonly y: number
   readonly closure: number
   readonly mode: HandMode
+  /** false — сцеп трекпада выключен, рука не ведёт курсор. undefined — источник без сцепа. */
+  readonly engaged?: boolean
   readonly hoverId?: string
   readonly hoverAction?: ToolbarAction
 }
@@ -125,7 +127,7 @@ function elementAt(ctx: StepContext, p: Point, currentId?: string): BoardElement
 function onCursor(c: ControllerState, e: CursorEvt, ctx: StepContext): StepResult {
   const prev = handOf(c, e.hand)
   const p = normToScreen(ctx.viewport, e.x, e.y)
-  const base: HandState = { ...prev, x: p.x, y: p.y, closure: e.closure }
+  const base: HandState = { ...prev, x: p.x, y: p.y, closure: e.closure, ...(e.engaged !== undefined ? { engaged: e.engaged } : {}) }
   if (prev.mode === 'hold') {
     const next = setHand(c, e.hand, base)
     return heldBy(ctx.state, e.hand) ? result(next, [{ type: 'dragTo', ...worldAt(ctx, p) }]) : result(next)

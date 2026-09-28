@@ -30,8 +30,8 @@ export const FRAME_ASPECT = 16 / 9
 export const EDGE_DEAD_ZONE = 0.08
 
 // One Euro filter для курсора. Единицы: доли экрана и герцы.
-export const ONE_EURO_MIN_CUTOFF = 1.2
-export const ONE_EURO_BETA = 6
+export const ONE_EURO_MIN_CUTOFF = 0.8
+export const ONE_EURO_BETA = 5
 export const ONE_EURO_D_CUTOFF = 1
 
 // Машина состояний руки.

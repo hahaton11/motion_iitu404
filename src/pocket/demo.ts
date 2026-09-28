@@ -1,5 +1,6 @@
 import { createBoard, PALETTE, type Board } from '../board'
 import type { CursorEvt, HintEvt, InputEventMap, InputEventType, InputSource } from '../contracts/input'
+import { CameraInput } from '../motion'
 import { MouseInput } from '../shared/mouse-input'
 import { createVoice } from '../voice'
 import { createPocket, type Pocket } from './index'
@@ -102,11 +103,18 @@ function seed(board: Board): void {
   board.addElement({ kind: 'triangle', x: 250, y: -60 }, { animate: false })
 }
 
+/** ?input=camera подключает камеру вместо мыши и показывает превью в углу. */
+function createInput(app: HTMLElement): InputSource {
+  if (new URLSearchParams(location.search).get('input') !== 'camera') return new HalfFistInput(new MouseInput(window))
+  const video = Object.assign(document.createElement('video'), { muted: true, playsInline: true, className: 'demo-cam' })
+  app.append(video)
+  return new CameraInput({ video })
+}
+
 function main(): void {
   const app = document.getElementById('app')
   if (!app) throw new Error('#app not found')
-  const mouse = new MouseInput(window)
-  const input = new HalfFistInput(mouse)
+  const input = createInput(app)
   const board = createBoard(app, input)
   const pocket = createPocket(board.layers.overlay, input, board)
   createVoice(board, input)
@@ -115,7 +123,9 @@ function main(): void {
   panel.append(eventLog(pocket))
   ;['pointerdown', 'wheel'].forEach((t) => panel.addEventListener(t, (e) => e.stopPropagation()))
   document.body.append(panel, hintToast(board))
-  void input.start()
+  input.start().catch((err: unknown) =>
+    board.emitHint({ code: 'CAMERA_FAILED', message: err instanceof Error ? err.message : 'Камера недоступна, открой страницу без ?input=camera', severity: 'warn' }),
+  )
 }
 
 main()

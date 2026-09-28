@@ -1,0 +1,108 @@
+/* Индикатор голосовой записи. Анимируются только transform и opacity. */
+.vc-indicator {
+  --vc-x: 0px;
+  --vc-y: 0px;
+  --vc-w: 0px;
+  --vc-h: 0px;
+  --vc-r: 0deg;
+  --vc-rec: #ff5a6e;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform: translate3d(var(--vc-x), var(--vc-y), 0);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 160ms ease-out;
+  font-family: var(--mb-font);
+}
+
+.vc-indicator.is-on {
+  opacity: 1;
+}
+
+.vc-ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--vc-w);
+  height: var(--vc-h);
+  border-radius: 16px;
+  box-shadow:
+    0 0 0 3px var(--vc-rec),
+    0 0 30px 6px rgba(255, 90, 110, 0.45);
+  transform: translate(-50%, -50%) rotate(var(--vc-r));
+  animation: vc-pulse 1.1s ease-in-out infinite;
+}
+
+.vc-pill {
+  position: absolute;
+  left: 0;
+  top: calc(var(--vc-h) / 2 - 18px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(6, 9, 15, 0.9);
+  box-shadow: 0 0 0 1px rgba(255, 90, 110, 0.6);
+  color: var(--mb-fg);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transform: translate(-50%, 0);
+}
+
+.vc-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--vc-rec);
+  animation: vc-blink 0.9s ease-in-out infinite;
+}
+
+.vc-interim {
+  position: absolute;
+  left: 0;
+  top: calc(var(--vc-h) / 2 + 24px);
+  max-width: 360px;
+  width: max-content;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--mb-surface);
+  border: 1px solid var(--mb-line);
+  color: var(--mb-fg);
+  font-size: 16px;
+  line-height: 1.3;
+  font-style: italic;
+  transform: translate(-50%, 0);
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.vc-interim.is-on {
+  opacity: 1;
+}
+
+@keyframes vc-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes vc-blink {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.8);
+  }
+}

@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 360" width="480" height="360">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f1b2e"/>
+      <stop offset="1" stop-color="#1a2640"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.42" r="0.5">
+      <stop offset="0" stop-color="#ffe27a" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#ffe27a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bulb" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff3b8"/>
+      <stop offset="1" stop-color="#ffc94a"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="360" rx="28" fill="url(#bg)"/>
+  <g fill="#5ad1ff" opacity="0.16">
+    <circle cx="60" cy="60" r="3"/><circle cx="120" cy="300" r="3"/><circle cx="420" cy="80" r="3"/>
+    <circle cx="400" cy="290" r="3"/><circle cx="70" cy="200" r="3"/><circle cx="430" cy="190" r="3"/>
+  </g>
+  <circle cx="240" cy="150" r="150" fill="url(#glow)"/>
+  <g stroke="#ffe27a" stroke-width="10" stroke-linecap="round" opacity="0.9">
+    <line x1="240" y1="30" x2="240" y2="58"/>
+    <line x1="150" y1="66" x2="168" y2="86"/>
+    <line x1="330" y1="66" x2="312" y2="86"/>
+    <line x1="112" y1="150" x2="138" y2="150"/>
+    <line x1="368" y1="150" x2="342" y2="150"/>
+  </g>
+  <path d="M240 82c-41 0-72 31-72 70 0 26 13 43 26 57 9 10 15 20 16 33h60c1-13 7-23 16-33 13-14 26-31 26-57 0-39-31-70-72-70z" fill="url(#bulb)"/>
+  <path d="M214 170l14 16 12-26 12 26 14-16" fill="none" stroke="#c7861b" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="208" y="250" width="64" height="14" rx="7" fill="#7c8cff"/>
+  <rect x="212" y="268" width="56" height="14" rx="7" fill="#5ad1ff"/>
+  <path d="M224 286h32l-6 12h-20z" fill="#3fe0b0"/>
+  <text x="240" y="336" text-anchor="middle" font-family="system-ui, sans-serif" font-size="20" font-weight="700" fill="#e6edf7" opacity="0.85">Идея!</text>
+</svg>

@@ -167,8 +167,15 @@ function stepMissing(track: HandTrack, t: number): HandStep {
     return { track: { ...track, machine: r.state, swipe: resetSwipe(track.swipe) }, machineEvents: [], debug: undefined, lostFast: false }
   }
   // Release решается по тому, что знает потребитель: во время zoom машина могла отпустить молча.
+  // Тип и скорость берутся у машины: она одна знает, был ли это бросок. Координаты — от курсора,
+  // чтобы элемент улетел оттуда, где его видел пользователь.
   const { x, y } = track.pointer.out ?? track.machine
-  const release: HandEvent[] = track.emittedHolding ? [{ type: 'release', x, y, vx: 0, vy: 0 }] : []
+  const isDrop = (e: HandEvent): e is Extract<HandEvent, { type: 'release' | 'throw' }> =>
+    e.type === 'release' || e.type === 'throw'
+  const fromMachine = r.events.find(isDrop)
+  const release: HandEvent[] = track.emittedHolding
+    ? [fromMachine ? { ...fromMachine, x, y } : { type: 'release', x, y, vx: 0, vy: 0 }]
+    : []
   const events: HandEvent[] = [...release, { type: 'handlost' }]
   return { track: emptyTrack(), machineEvents: events, debug: undefined, lostFast: speed > LOST_FAST_SPEED }
 }

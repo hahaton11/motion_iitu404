@@ -3,6 +3,7 @@ import { VelocityTracker, speedOf } from '../shared/velocity'
 import {
   DEFAULT_HOLD_THRESHOLD,
   DEFAULT_OPEN_THRESHOLD,
+  FAST_RELEASE_FRAMES,
   GRAB_FRAMES,
   HAND_LOST_MS,
   POINT_MOVE_MAX,
@@ -101,7 +102,11 @@ function stepPhase(s: HandState, f: HandFrame, th: Thresholds): StepResult {
       if (!opened) return { state: { ...s, phase: 'holding', count: 0 }, events: [] }
       const count = s.count + 1
       const peak = s.phase === 'opening' ? faster(s.peak, v) : v
-      if (count < RELEASE_FRAMES) return { state: { ...s, phase: 'opening', count, peak }, events: [] }
+      // Подтверждение отпускания короче, когда рука уже летит: бросок длится доли секунды,
+      // и три кадра подтверждения поверх окна голосования в него не помещаются.
+      // Промах в сторону раннего отпускания стоит недолёта, промах в сторону позднего — броска целиком.
+      const need = speedOf(peak) > THROW_SPEED ? FAST_RELEASE_FRAMES : RELEASE_FRAMES
+      if (count < need) return { state: { ...s, phase: 'opening', count, peak }, events: [] }
       const type = speedOf(peak) > THROW_SPEED ? 'throw' : 'release'
       return { state: { ...s, phase: 'open', count: 0, peak: ZERO }, events: [{ type, x: f.x, y: f.y, ...peak }] }
     }
@@ -126,11 +131,20 @@ export function stepHand(s: HandState, f: HandFrame, th: Thresholds = DEFAULT_TH
 }
 
 /**
- * Шаг по кадру, в котором руки нет. После HAND_LOST_MS шлёт handlost,
- * а если рука держала элемент, перед этим release с нулевой скоростью.
+ * Шаг по кадру, в котором руки нет. После HAND_LOST_MS шлёт handlost, а если рука держала
+ * элемент — перед этим отпускание с той скоростью, с которой рука пропала.
+ *
+ * Скорость здесь важна. Рука теряется как раз на резком махе: детектор не успевает за
+ * смазанным кадром. С нулевой скоростью бросок превращался в вялое падение на месте —
+ * пользователь махнул, а элемент просто лёг под руку.
  */
 export function stepHandMissing(s: HandState, t: number): StepResult {
   if (s.lastSeen === undefined || t - s.lastSeen < HAND_LOST_MS) return { state: s, events: [] }
-  const release: HandEvent[] = isHoldingPhase(s.phase) ? [{ type: 'release', x: s.x, y: s.y, ...ZERO }] : []
-  return { state: initialHandState(), events: [...release, { type: 'handlost' }] }
+  const events: HandEvent[] = []
+  if (isHoldingPhase(s.phase)) {
+    const peak = faster(s.peak, s.vel.velocity())
+    const type = speedOf(peak) > THROW_SPEED ? 'throw' : 'release'
+    events.push({ type, x: s.x, y: s.y, ...peak })
+  }
+  return { state: initialHandState(), events: [...events, { type: 'handlost' }] }
 }

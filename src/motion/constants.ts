@@ -56,6 +56,8 @@ export const DEFAULT_HOLD_THRESHOLD = 0.75
 export const DEFAULT_OPEN_THRESHOLD = 0.45
 export const GRAB_FRAMES = 3
 export const RELEASE_FRAMES = 3
+/** Кадров подтверждения отпускания, когда рука уже летит быстрее THROW_SPEED. */
+export const FAST_RELEASE_FRAMES = 1
 /** Максимальное смещение курсора, при котором указательный жест считается неподвижным. */
 export const POINT_MOVE_MAX = 0.03
 /** Рука не видна дольше этого времени → handlost. */

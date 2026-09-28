@@ -94,6 +94,19 @@ describe('stepHand throw', () => {
     const seq = [...repeat({ closure: 0.9 }, 4), ...[0.3, 0.2, 0.1].map((closure, i) => ({ closure, x: 0.5 + i * 0.005 }))]
     expect(types(runFrames(frames(seq)).events)).toEqual(['grab', 'release'])
   })
+
+  it('needs a single opening frame while the hand is already flying', () => {
+    const grab = repeat({ closure: 0.9, x: 0.2 }, 3)
+    const sweep = [1, 2, 3].map((i) => ({ closure: 0.9, x: 0.2 + i * 0.12 }))
+    const oneOpenFrame = [{ closure: 0.1, x: 0.2 + 4 * 0.12 }]
+    expect(types(runFrames(frames([...grab, ...sweep, ...oneOpenFrame])).events)).toEqual(['grab', 'throw'])
+  })
+
+  it('still needs three opening frames at a slow speed', () => {
+    const grab = repeat({ closure: 0.9, x: 0.2 }, 3)
+    const oneOpenFrame = [{ closure: 0.1, x: 0.2 }]
+    expect(types(runFrames(frames([...grab, ...oneOpenFrame])).events)).toEqual(['grab'])
+  })
 })
 
 describe('stepHand point', () => {
@@ -121,11 +134,19 @@ describe('stepHandMissing', () => {
     expect(types(stepHandMissing(seen, 300).events)).toEqual(['handlost'])
   })
 
-  it('releases with zero velocity before handlost when holding', () => {
+  it('releases a still hand in place before handlost', () => {
     const held = runFrames(frames(repeat({ closure: 0.9, x: 0.4, y: 0.6 }, 3))).state
     const r = stepHandMissing(held, 1000)
     expect(r.events).toEqual([{ type: 'release', x: 0.4, y: 0.6, vx: 0, vy: 0 }, { type: 'handlost' }])
     expect(r.state.phase).toBe('open')
+  })
+
+  it('throws with the last speed when the hand is lost mid-sweep', () => {
+    const sweep = Array.from({ length: 5 }, (_, i) => ({ closure: 0.9, x: 0.2 + i * 0.12 }))
+    const r = stepHandMissing(runFrames(frames(sweep)).state, 1000)
+    const [first] = r.events
+    expect(types(r.events)).toEqual(['throw', 'handlost'])
+    expect(first?.type === 'throw' && first.vx).toBeGreaterThan(2.2)
   })
 
   it('does nothing for a hand that was never seen', () => {

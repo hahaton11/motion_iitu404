@@ -4,3 +4,5 @@ dist
 *.local
 test-assets/*.y4m
 .claude/
+test-results/
+playwright-report/

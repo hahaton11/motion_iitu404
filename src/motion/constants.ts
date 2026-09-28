@@ -115,6 +115,12 @@ export const CALIBRATION_OPEN_RATIO = 0.45
 // Трекер.
 export const CAMERA_WIDTH = 1280
 export const CAMERA_HEIGHT = 720
+/**
+ * Чем выше частота съёмки, тем короче выдержка кадра и тем меньше смаз на резком движении.
+ * Точки кисти заметно теряются в качестве на съёмке ниже 60 кадров, а бросок целиком состоит
+ * из таких кадров. Пожелание, а не требование: камера без 60 кадров отдаст, сколько умеет.
+ */
+export const CAMERA_FPS = 60
 export const NUM_HANDS = 2
 export const MIN_DETECTION_CONFIDENCE = 0.5
 export const MIN_PRESENCE_CONFIDENCE = 0.5

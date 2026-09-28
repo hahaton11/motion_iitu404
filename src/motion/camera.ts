@@ -1,4 +1,4 @@
-import { CAMERA_HEIGHT, CAMERA_WIDTH } from './constants'
+import { CAMERA_FPS, CAMERA_HEIGHT, CAMERA_WIDTH } from './constants'
 
 /** Доступ к фронтальной камере. Ошибки переводятся в понятный текст с действием. */
 
@@ -44,7 +44,12 @@ export function cameraErrorCode(err: unknown): CameraErrorCode {
 
 export const CAMERA_CONSTRAINTS: MediaStreamConstraints = {
   audio: false,
-  video: { width: { ideal: CAMERA_WIDTH }, height: { ideal: CAMERA_HEIGHT }, facingMode: 'user' },
+  video: {
+    width: { ideal: CAMERA_WIDTH },
+    height: { ideal: CAMERA_HEIGHT },
+    frameRate: { ideal: CAMERA_FPS },
+    facingMode: 'user',
+  },
 }
 
 /** Включает камеру и запускает видео. Бросает CameraError. */

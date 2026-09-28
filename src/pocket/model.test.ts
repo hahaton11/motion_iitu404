@@ -11,6 +11,7 @@ import {
   scrollBy,
   setItems,
   sortItems,
+  stickyFromText,
   stashElement,
   takeItem,
   visibleItems,
@@ -96,6 +97,18 @@ describe('pocket model', () => {
   it('sorts newest first', () => {
     const sorted = sortItems([sticky('old', 'preset', 1), sticky('new', 'preset', 9)])
     expect(sorted.map((i) => i.id)).toEqual(['new', 'old'])
+  })
+})
+
+describe('stickyFromText', () => {
+  it('collapses whitespace and ignores empty text', () => {
+    expect(stickyFromText('  две\n  строки ')).toEqual({ kind: 'sticky', text: 'две строки' })
+    expect(stickyFromText('   ')).toBeUndefined()
+    expect(stickyFromText('x', '#fff')?.color).toBe('#fff')
+  })
+
+  it('cuts very long text', () => {
+    expect(stickyFromText('a'.repeat(900))?.text).toHaveLength(500)
   })
 })
 

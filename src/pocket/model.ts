@@ -150,6 +150,13 @@ export function parseItem(raw: unknown): PocketItem | undefined {
   return makeItem(raw.id, raw.type, content, createdAt)
 }
 
+/** Текст из буфера или поля ввода превращается в стикер. Пустой текст — ничего. */
+export function stickyFromText(raw: string, color?: string): PocketContent | undefined {
+  const text = raw.replace(/\s+/g, ' ').trim().slice(0, MAX_TEXT_LENGTH)
+  if (!text) return undefined
+  return color ? { kind: 'sticky', text, color } : { kind: 'sticky', text }
+}
+
 /** Порядок в веере: новые первыми. */
 export const sortItems = (items: readonly PocketItem[]): readonly PocketItem[] =>
   [...items].sort((a, b) => b.createdAt - a.createdAt)

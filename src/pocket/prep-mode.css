@@ -1,0 +1,201 @@
+/* Режим подготовки: мышь и клавиатура. Панель выезжает снизу на место кармана. */
+.pk-prep-toggle,
+.pk-prep {
+  pointer-events: auto;
+  font-family: var(--mb-font);
+  color: var(--mb-fg);
+}
+
+.pk-prep-toggle {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 20;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--mb-line);
+  background: var(--mb-surface);
+  backdrop-filter: blur(10px);
+  font: 600 14px/1 var(--mb-font);
+  color: var(--mb-fg);
+  cursor: pointer;
+  transition: opacity 160ms ease-out;
+}
+
+.pk-prep-toggle:hover {
+  opacity: 0.85;
+}
+
+.pk-prep-toggle.is-on {
+  background: var(--mb-accent);
+  color: #06090f;
+  border-color: transparent;
+}
+
+.pk-prep {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  z-index: 19;
+  width: min(calc(100% - 24px), 1040px);
+  max-height: 46vh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px 20px;
+  border-radius: 22px 22px 0 0;
+  border: 1px solid var(--mb-line);
+  border-bottom: 0;
+  background: rgba(10, 16, 28, 0.94);
+  box-shadow: 0 -18px 60px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  transform: translate3d(-50%, 105%, 0);
+  transition:
+    transform 280ms var(--mb-ease-out),
+    opacity 200ms ease-out;
+  visibility: hidden;
+}
+
+.pk-prep.is-on {
+  opacity: 1;
+  transform: translate3d(-50%, 0, 0);
+  visibility: visible;
+}
+
+.pk-prep::after {
+  content: 'Отпусти, чтобы положить в карман';
+  position: absolute;
+  inset: 8px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  border: 2px dashed var(--mb-accent);
+  background: rgba(6, 9, 15, 0.8);
+  color: var(--mb-accent);
+  font-weight: 700;
+  font-size: 18px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease-out;
+}
+
+.pk-prep.is-drop::after {
+  opacity: 1;
+}
+
+.pk-prep-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pk-prep-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.pk-prep-title {
+  margin: 0;
+  font-size: 16px;
+}
+
+.pk-prep-help {
+  margin: 4px 0 0;
+  color: var(--mb-muted);
+  font-size: 13px;
+}
+
+.pk-prep-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  overflow: auto;
+  padding: 6px 2px;
+  min-height: 108px;
+}
+
+.pk-prep-tile.pk-card {
+  position: relative;
+  flex: none;
+  width: 96px;
+  height: 96px;
+  opacity: 1;
+  transform: none;
+  transition: none;
+}
+
+.pk-prep-del {
+  position: absolute;
+  left: -6px;
+  top: -6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--mb-line);
+  background: #1a2233;
+  color: var(--mb-danger);
+  font: 700 16px/1 var(--mb-font);
+  cursor: pointer;
+  z-index: 2;
+}
+
+.pk-prep-del:hover {
+  background: var(--mb-danger);
+  color: #06090f;
+}
+
+.pk-prep-empty {
+  align-self: center;
+  color: var(--mb-muted);
+  font-size: 14px;
+}
+
+.pk-prep-form {
+  display: flex;
+  gap: 8px;
+}
+
+.pk-prep-input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--mb-line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--mb-fg);
+  font: 14px/1.2 var(--mb-font);
+  outline: none;
+}
+
+.pk-prep-input:focus {
+  border-color: var(--mb-accent);
+}
+
+.pk-prep-btn {
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 0;
+  background: var(--mb-accent);
+  color: #06090f;
+  font: 700 14px/1 var(--mb-font);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pk-prep-btn.is-ghost {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--mb-fg);
+}
+
+.pk-prep-note {
+  min-height: 18px;
+  color: var(--mb-accent);
+  font-size: 13px;
+  opacity: 0;
+  transition: opacity 160ms ease-out;
+}
+
+.pk-prep-note.is-on {
+  opacity: 1;
+}

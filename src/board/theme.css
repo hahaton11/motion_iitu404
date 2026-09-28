@@ -118,7 +118,7 @@
 }
 
 .mb-el.is-hover .mb-outline {
-  opacity: 0.55;
+  opacity: 0.95;
 }
 
 .mb-el.is-selected .mb-outline {
@@ -259,9 +259,9 @@
   height: 14px;
   border-radius: 50%;
   background: var(--mb-accent);
-  box-shadow: 0 0 14px 2px var(--mb-accent-glow);
-  opacity: 0.7;
-  transition: opacity 120ms ease-out;
+  box-shadow: 0 0 10px 1px var(--mb-accent-glow);
+  opacity: 0.4;
+  transition: opacity 160ms ease-out;
   will-change: transform;
 }
 
@@ -281,6 +281,10 @@
 .mb-cursor.is-over::after {
   opacity: 0.8;
   transform: scale(1);
+}
+
+.mb-cursor.is-focus {
+  opacity: 0.12;
 }
 
 .mb-cursor.is-hidden {

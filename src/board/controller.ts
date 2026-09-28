@@ -8,7 +8,8 @@ import type {
   ReleaseEvt,
   ZoomEvt,
 } from '../contracts/input'
-import { clampToView, hitTest, normToScreen, screenToWorld, type Point, type Viewport } from './geometry'
+import { FOCUS_RADIUS_PX, FOCUS_STICKY_PX, focusAt } from './focus'
+import { clampToView, normToScreen, screenToWorld, type Point, type Viewport } from './geometry'
 import { nextColor, type BoardElement, type BoardState } from './model'
 import { ZOOM_MAX, ZOOM_MIN, type BoardAction } from './store'
 import { toolbarHit, toolbarLayout, type ToolbarAction } from './toolbar'
@@ -115,8 +116,10 @@ function worldAt(ctx: StepContext, p: Point): Point {
   return screenToWorld(ctx.state.camera, ctx.viewport, p)
 }
 
-function elementAt(ctx: StepContext, p: Point): BoardElement | undefined {
-  return hitTest(ctx.state.elements, worldAt(ctx, p), HIT_PAD_PX / ctx.state.camera.zoom)
+/** Элемент в магнитном фокусе руки: ближайший в радиусе, прошлый фокус удерживается. */
+function elementAt(ctx: StepContext, p: Point, currentId?: string): BoardElement | undefined {
+  const z = ctx.state.camera.zoom
+  return focusAt(ctx.state.elements, worldAt(ctx, p), FOCUS_RADIUS_PX / z, FOCUS_STICKY_PX / z, currentId)
 }
 
 function onCursor(c: ControllerState, e: CursorEvt, ctx: StepContext): StepResult {
@@ -133,7 +136,7 @@ function onCursor(c: ControllerState, e: CursorEvt, ctx: StepContext): StepResul
   }
   const layout = selectedLayout(ctx)
   const hoverAction = layout ? toolbarHit(layout, p) : undefined
-  const hoverId = hoverAction ? undefined : elementAt(ctx, p)?.id
+  const hoverId = hoverAction ? undefined : elementAt(ctx, p, prev.hoverId)?.id
   const { hoverId: _h, hoverAction: _a, ...plain } = base
   return result(setHand(c, e.hand, { ...plain, ...(hoverId ? { hoverId } : {}), ...(hoverAction ? { hoverAction } : {}) }))
 }
@@ -146,7 +149,7 @@ function onGrab(c: ControllerState, e: GrabEvt, ctx: StepContext): StepResult {
   if (layout && toolbarHit(layout, p)) {
     return result(setHand(c, e.hand, { ...hand, mode: 'idle' }), [], [{ type: 'hint', hint: BOARD_HINTS.TOOLBAR_POINT }])
   }
-  const target = elementAt(ctx, p)
+  const target = elementAt(ctx, p, handOf(c, e.hand).hoverId)
   if (target && !ctx.state.held) return grabElement(setHand(c, e.hand, hand), e.hand, target, worldAt(ctx, p), ctx)
   const mode = otherBusy || target ? 'idle' : 'pan'
   return result(setHand(c, e.hand, { ...hand, mode }))
@@ -212,7 +215,7 @@ function onPoint(c: ControllerState, e: PointEvt, ctx: StepContext): StepResult 
     const r = runToolbar(action, selected, ctx)
     return result(c, [...r.actions], [...r.effects])
   }
-  const target = elementAt(ctx, p)
+  const target = elementAt(ctx, p, handOf(c, e.hand).hoverId)
   if (target?.id === ctx.state.selectedId) return result(c)
   return result(c, [target ? { type: 'select', id: target.id } : { type: 'select' }])
 }

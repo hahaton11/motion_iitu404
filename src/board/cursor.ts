@@ -6,7 +6,8 @@ export const CLOSURE_SHRINK = 0.4
 
 /**
  * Прицел-горошина для каждой руки в экранных координатах.
- * Над элементом, который можно взять, вокруг точки появляется кольцо, а сам элемент подсвечивает контур.
+ * Магнитный фокус: элемент рядом с рукой подсвечивает контур, а прицел почти исчезает.
+ * Над кнопкой плашки вокруг точки появляется кольцо.
  * Пока рука держит элемент, прицел скрыт: за рукой следует сам элемент.
  */
 export class CursorLayer {
@@ -47,6 +48,8 @@ export class CursorLayer {
     const scale = 1 - Math.min(1, Math.max(0, h.closure)) * CLOSURE_SHRINK
     dot.style.transform = `translate3d(${h.x}px, ${h.y}px, 0) scale(${scale})`
     dot.classList.toggle('is-hidden', holding)
-    dot.classList.toggle('is-over', !holding && (h.hoverId !== undefined || h.hoverAction !== undefined))
+    // Элемент в фокусе подсвечивается сам, прицел над ним почти исчезает, чтобы не мешать.
+    dot.classList.toggle('is-focus', !holding && h.hoverId !== undefined)
+    dot.classList.toggle('is-over', !holding && h.hoverAction !== undefined)
   }
 }

@@ -61,3 +61,25 @@ describe('palmSize', () => {
     expect(a).toBeCloseTo(b)
   })
 })
+
+describe('pinch and victory', () => {
+  it('pinch is 0 for an open hand and 1 when the tips touch', () => {
+    expect(computeFeatures(syntheticHand(POSES.open)).pinch).toBe(0)
+    expect(computeFeatures(syntheticHand(POSES.grab)).pinch).toBe(1)
+  })
+
+  it('half pinch lands between the default thresholds', () => {
+    const p = computeFeatures(syntheticHand(POSES.halfPinch)).pinch
+    expect(p).toBeGreaterThan(0.45)
+    expect(p).toBeLessThan(0.75)
+  })
+
+  it('detects the V gesture and does not confuse it with pointing', () => {
+    const v = computeFeatures(syntheticHand(POSES.victory))
+    expect(v.victory).toBe(true)
+    expect(v.indexOnly).toBe(false)
+    const point = computeFeatures(syntheticHand(POSES.point))
+    expect(point.victory).toBe(false)
+    expect(point.indexOnly).toBe(true)
+  })
+})

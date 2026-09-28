@@ -3,8 +3,12 @@ import {
   EDGE_HINT_MARGIN,
   GEOMETRY_HINT_MS,
   HALF_GESTURE_MS,
+  HAND_TOO_HIGH_MS,
+  HAND_TOO_HIGH_Y,
   HINT_COOLDOWN_MS,
   NO_HAND_MS,
+  NOT_POINTING_MS,
+  NOT_POINTING_SPEED,
   PALM_SIZE_MAX,
   PALM_SIZE_MIN,
   POOR_TRACKING_MS,
@@ -17,8 +21,10 @@ import type { Thresholds, Vec2 } from './types'
 /** Детектор подсказок режима «ошибка»: условие должно продержаться, один код не чаще раза в 3 секунды. */
 
 export const HINT_TEXTS: Readonly<Record<MotionHintCode, Pick<HintEvt, 'message' | 'severity'>>> = {
-  HALF_GRAB: { message: 'Сожми кулак полностью, чтобы взять', severity: 'warn' },
-  HALF_RELEASE: { message: 'Раскрой ладонь шире, чтобы отпустить', severity: 'warn' },
+  HALF_GRAB: { message: 'Сомкни большой и указательный до касания, чтобы взять', severity: 'warn' },
+  HALF_RELEASE: { message: 'Разведи большой и указательный шире, чтобы отпустить', severity: 'warn' },
+  HAND_TOO_HIGH: { message: 'Опусти руку к груди: курсор ведётся движением, а не положением руки', severity: 'info' },
+  NOT_POINTING: { message: 'Вытяни указательный палец, чтобы вести курсор', severity: 'info' },
   HAND_NEAR_EDGE: { message: 'Рука у края кадра, веди её ближе к центру', severity: 'info' },
   TOO_FAR: { message: 'Подойди на шаг ближе к камере', severity: 'info' },
   TOO_CLOSE: { message: 'Отойди на шаг назад, рука не помещается в кадр', severity: 'info' },
@@ -30,7 +36,12 @@ export const HINT_TEXTS: Readonly<Record<MotionHintCode, Pick<HintEvt, 'message'
 export interface HintHandInput {
   readonly hand: HandId
   readonly phase: HandPhase
+  /** Сила щипка 0..1. */
   readonly closure: number
+  /** Сцеп трекпада включён. */
+  readonly engaged: boolean
+  /** Скорость руки, доли экрана в секунду. */
+  readonly speed: number
   /** Центр ладони в координатах кадра. */
   readonly center: Vec2
   readonly palmSize: number
@@ -70,6 +81,8 @@ function handConditions(h: HintHandInput, th: Thresholds): Condition[] {
   return [
     c('HALF_GRAB', inBand && !holding, HALF_GESTURE_MS),
     c('HALF_RELEASE', inBand && holding, HALF_GESTURE_MS),
+    c('HAND_TOO_HIGH', h.center.y < HAND_TOO_HIGH_Y, HAND_TOO_HIGH_MS),
+    c('NOT_POINTING', !h.engaged && h.speed > NOT_POINTING_SPEED, NOT_POINTING_MS),
     c('HAND_NEAR_EDGE', edgeDistance(h.center) < EDGE_HINT_MARGIN, GEOMETRY_HINT_MS),
     c('TOO_FAR', h.palmSize < PALM_SIZE_MIN, GEOMETRY_HINT_MS),
     c('TOO_CLOSE', h.palmSize > PALM_SIZE_MAX, GEOMETRY_HINT_MS),

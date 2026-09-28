@@ -19,7 +19,7 @@ const syntheticFixture = (poses: readonly FingerCurls[]): Fixture => ({
 
 describe('fixture format', () => {
   it('round-trips through JSON and reproduces gestures', () => {
-    const fx = syntheticFixture([...Array(5).fill(POSES.open), ...Array(5).fill(POSES.fist), ...Array(5).fill(POSES.open)])
+    const fx = syntheticFixture([...Array(5).fill(POSES.open), ...Array(5).fill(POSES.grab), ...Array(5).fill(POSES.open)])
     const parsed = parseFixture(JSON.parse(JSON.stringify(fx)))
     expect(gestureEventTypes(runFixture(parsed))).toEqual(['grab', 'release'])
   })

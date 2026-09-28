@@ -9,6 +9,8 @@ const hand = (over: Partial<HintHandInput> = {}): HintHandInput => ({
   hand: 'right',
   phase: 'open',
   closure: 0.1,
+  engaged: true,
+  speed: 0,
   center: { x: 0.5, y: 0.5 },
   palmSize: 0.15,
   score: 0.95,
@@ -40,7 +42,7 @@ describe('stepHints', () => {
     const hs = runFor({ hands: [hand({ closure: 0.6 })] }, 700)
     expect(codes(hs)).toEqual(['HALF_GRAB'])
     expect(hs[0]!.t).toBeGreaterThanOrEqual(500)
-    expect(hs[0]!.message).toBe('Сожми кулак полностью, чтобы взять')
+    expect(hs[0]!.message).toBe('Сомкни большой и указательный до касания, чтобы взять')
     expect(hs[0]!.hand).toBe('right')
   })
 
@@ -112,5 +114,19 @@ describe('stepHints', () => {
 
   it('has an action text for every code', () => {
     Object.values(HINT_TEXTS).forEach((h) => expect(h.message.length).toBeGreaterThan(10))
+  })
+})
+
+describe('trackpad hints', () => {
+  it('HAND_TOO_HIGH when the hand stays in the top of the frame', () => {
+    expect(codes(runFor({ hands: [hand({ center: { x: 0.5, y: 0.15 } })] }, 1700))).toEqual(['HAND_TOO_HIGH'])
+  })
+
+  it('NOT_POINTING when the hand moves without the clutch', () => {
+    expect(codes(runFor({ hands: [hand({ engaged: false, speed: 0.8 })] }, 1000))).toEqual(['NOT_POINTING'])
+  })
+
+  it('stays quiet while the hand moves with the clutch', () => {
+    expect(codes(runFor({ hands: [hand({ engaged: true, speed: 0.8 })] }, 1000))).toEqual([])
   })
 })

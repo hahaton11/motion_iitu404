@@ -11,9 +11,14 @@ export interface CursorEvt {
   readonly hand: HandId
   readonly x: number
   readonly y: number
-  /** 0 = ладонь раскрыта, 1 = кулак. */
+  /** Сила захвата: 0 = отпущено, 1 = захват. У камеры это щипок большим и указательным. */
   readonly closure: number
   readonly holding: boolean
+  /**
+   * Сцеп трекпада: рука сейчас ведёт курсор. false — рука свободна, курсор стоит.
+   * Источники без сцепа, например мышь, поле не заполняют.
+   */
+  readonly engaged?: boolean
 }
 
 export interface GrabEvt {
@@ -34,7 +39,7 @@ export interface ReleaseEvt {
 /** Отпускание с высокой скоростью. Приходит вместо release, не вместе с ним. */
 export type ThrowEvt = ReleaseEvt
 
-/** Вытянут только указательный палец, удержание 600 мс. */
+/** Удержание указательного жеста 600 мс. У камеры это «V»: указательный и средний вытянуты. */
 export interface PointEvt {
   readonly hand: HandId
   readonly x: number
@@ -61,6 +66,8 @@ export type MotionHintCode =
   | 'HALF_RELEASE'
   | 'MOVING_TOO_FAST'
   | 'POOR_TRACKING'
+  | 'HAND_TOO_HIGH'
+  | 'NOT_POINTING'
 
 /** Подсказка режима «ошибка». message — конкретное действие для исправления, на русском. */
 export interface HintEvt {

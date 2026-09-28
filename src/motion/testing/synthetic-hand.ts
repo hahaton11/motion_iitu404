@@ -13,6 +13,8 @@ export interface FingerCurls {
   readonly middle: number
   readonly ring: number
   readonly pinky: number
+  /** Щипок 0..1: кончик большого пальца сдвигается к кончику указательного. */
+  readonly grip?: number
 }
 
 export interface PoseOptions {
@@ -31,7 +33,9 @@ interface FingerModel {
 }
 
 /** Направление пальца: 0° строго вверх, отрицательные углы к большому пальцу. */
-const FINGERS: Record<keyof FingerCurls, FingerModel> = {
+type FingerName = Exclude<keyof FingerCurls, 'grip'>
+
+const FINGERS: Record<FingerName, FingerModel> = {
   thumb: { angleDeg: -55, baseLen: 0.03, bones: [0.035, 0.03, 0.025] },
   index: { angleDeg: -12, baseLen: 0.09, bones: [0.04, 0.025, 0.02] },
   middle: { angleDeg: 0, baseLen: 0.09, bones: [0.045, 0.028, 0.022] },
@@ -39,7 +43,7 @@ const FINGERS: Record<keyof FingerCurls, FingerModel> = {
   pinky: { angleDeg: 22, baseLen: 0.075, bones: [0.032, 0.02, 0.018] },
 }
 
-const ORDER: readonly (keyof FingerCurls)[] = ['thumb', 'index', 'middle', 'ring', 'pinky']
+const ORDER: readonly FingerName[] = ['thumb', 'index', 'middle', 'ring', 'pinky']
 /** Доли полного сгибания, приходящиеся на суставы MCP, PIP, DIP. */
 const JOINT_SHARE = [0.35, 0.4, 0.25] as const
 const DEFAULT_SCALE = 0.8
@@ -67,7 +71,12 @@ function fingerPoints(model: FingerModel, curl: number): Vec3[] {
 /** Метрические точки руки, запястье в начале координат. */
 export function worldPose(curls: FingerCurls): Landmarks {
   const wrist: Vec3 = { x: 0, y: 0, z: 0 }
-  return [wrist, ...ORDER.flatMap((f) => fingerPoints(FINGERS[f], curls[f]))]
+  const pts = [wrist, ...ORDER.flatMap((f) => fingerPoints(FINGERS[f], curls[f]))]
+  const g = curls.grip ?? 0
+  const thumbTip = pts[4]
+  const indexTip = pts[8]
+  if (g <= 0 || !thumbTip || !indexTip) return pts
+  return pts.map((p, i) => (i === 4 ? add(mul(thumbTip, 1 - g), mul(indexTip, g)) : p))
 }
 
 /** Полная детекция: мировые точки и их проекция в кадр. */
@@ -87,5 +96,10 @@ export const POSES = {
   half: uniform(0.6),
   point: { thumb: 0.8, index: 0, middle: 1, ring: 1, pinky: 1 },
   pinch: { thumb: 0.5, index: 0.5, middle: 0.05, ring: 0.05, pinky: 0.05 },
+  /** Полный щипок при раскрытой ладони. */
+  grab: { ...uniform(0), grip: 1 },
+  /** Щипок наполовину: сила около 0.6, между порогами. */
+  halfPinch: { ...uniform(0), grip: 0.62 },
+  victory: { thumb: 0.8, index: 0, middle: 0, ring: 1, pinky: 1 },
   curl: uniform,
 } as const

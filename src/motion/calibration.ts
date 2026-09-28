@@ -32,15 +32,15 @@ export interface CalibrationState {
 }
 
 export const CALIBRATION_PROMPTS: Readonly<Record<CalibrationStep, string>> = {
-  open: 'Покажи открытую ладонь',
-  fist: 'Сожми кулак',
+  open: 'Разведи большой и указательный пальцы',
+  fist: 'Сомкни их в щипок',
   done: 'Готово, пороги настроены под твою руку',
   failed: 'Повтори калибровку',
 }
 
 export const CALIBRATION_ERRORS = {
   noHand: 'Держи руку в кадре все 5 секунд и повтори калибровку',
-  smallRange: 'Раскрой ладонь шире и сожми кулак сильнее, затем повтори калибровку',
+  smallRange: 'Разведи пальцы шире и сомкни щипок плотнее, затем повтори калибровку',
 } as const
 
 export function startCalibration(t: number): CalibrationState {

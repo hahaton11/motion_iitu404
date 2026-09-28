@@ -1,108 +1,109 @@
 import {
-  POINTER_BOX,
   POINTER_FREE_FILTER,
   POINTER_FREEZE_MAX_MS,
+  POINTER_GAIN_MAX,
+  POINTER_GAIN_MIN,
+  POINTER_GAIN_SPEED,
   POINTER_HOLD_FILTER,
   POINTER_LEASH_FREE,
   POINTER_LEASH_HOLD,
-  POINTER_OFFSET_BLEED,
 } from './constants'
 import { oneEuro2DStep, oneEuro2DValue, type OneEuro2DState, type OneEuroParams } from './one-euro'
 import type { Vec2 } from './types'
 
 /**
- * Курсор руки: рабочая зона кадра → экран, фильтр по режиму, поводок против микродрожи,
- * заморозка на время сжатия и разжатия кулака, чтобы курсор не прыгал в момент захвата.
+ * Воздушный трекпад. Курсор сдвигается на смещение руки, только пока включён сцеп:
+ * вытянут указательный или идёт щипок. Без сцепа рука свободна, курсор стоит на месте,
+ * поэтому руку можно держать где удобно, например у груди, и она не закрывает экран.
+ * Усиление зависит от скорости, как ускорение мыши. Пока щипок смыкается, курсор заморожен.
  */
 
-export interface PointerBox {
-  readonly cx: number
-  readonly cy: number
-  readonly w: number
-  readonly h: number
-}
-
 export interface PointerParams {
-  readonly box: PointerBox
+  readonly gainMin: number
+  readonly gainMax: number
+  /** Скорость руки в долях кадра в секунду, на которой усиление достигает максимума. */
+  readonly gainSpeed: number
   readonly freeFilter: OneEuroParams
   readonly holdFilter: OneEuroParams
   readonly leashFree: number
   readonly leashHold: number
   readonly freezeMaxMs: number
-  readonly offsetBleed: number
 }
 
 export const DEFAULT_POINTER: PointerParams = {
-  box: POINTER_BOX,
+  gainMin: POINTER_GAIN_MIN,
+  gainMax: POINTER_GAIN_MAX,
+  gainSpeed: POINTER_GAIN_SPEED,
   freeFilter: POINTER_FREE_FILTER,
   holdFilter: POINTER_HOLD_FILTER,
   leashFree: POINTER_LEASH_FREE,
   leashHold: POINTER_LEASH_HOLD,
   freezeMaxMs: POINTER_FREEZE_MAX_MS,
-  offsetBleed: POINTER_OFFSET_BLEED,
 }
 
 export interface PointerState {
   readonly filter: OneEuro2DState | undefined
-  readonly out: Vec2 | undefined
-  readonly lastMapped: Vec2 | undefined
-  /** Сдвиг, накопленный после заморозок, гасится по мере движения руки. */
-  readonly offset: Vec2
-  readonly freeze: { readonly since: number; readonly mapped: Vec2 } | undefined
-  /** Заморозка уже отработала в текущем переходе, повторно не включается до его конца. */
+  /** Сглаженная позиция руки в прошлом кадре, зеркальная, доли кадра. */
+  readonly hand: Vec2 | undefined
+  readonly t: number | undefined
+  /** Куда ведёт рука, до поводка. */
+  readonly target: Vec2
+  /** Что видит пользователь. */
+  readonly out: Vec2
+  readonly freezeSince: number | undefined
+  /** Заморозка уже отработала в текущем переходе. */
   readonly freezeSpent: boolean
+  /** Сцеп был включён в прошлом кадре: движение считается только между двумя сцепленными кадрами. */
+  readonly engaged: boolean
 }
 
 export interface PointerContext {
+  /** Сцеп включён: рука ведёт курсор. */
+  readonly engaged: boolean
   readonly holding: boolean
-  /** Кулак в промежутке между порогами: сжимается или разжимается. */
+  /** Щипок между порогами: смыкается или размыкается. */
   readonly transitioning: boolean
 }
 
-export const initialPointer = (): PointerState => ({
+const CENTER: Vec2 = { x: 0.5, y: 0.5 }
+
+export const initialPointer = (start: Vec2 = CENTER): PointerState => ({
   filter: undefined,
-  out: undefined,
-  lastMapped: undefined,
-  offset: { x: 0, y: 0 },
-  freeze: undefined,
+  hand: undefined,
+  t: undefined,
+  target: start,
+  out: start,
+  freezeSince: undefined,
   freezeSpent: false,
+  engaged: false,
 })
 
 const clamp01 = (v: number): number => Math.min(1, Math.max(0, v))
+const clampPoint = (p: Vec2): Vec2 => ({ x: clamp01(p.x), y: clamp01(p.y) })
 const add = (a: Vec2, b: Vec2): Vec2 => ({ x: a.x + b.x, y: a.y + b.y })
 const sub = (a: Vec2, b: Vec2): Vec2 => ({ x: a.x - b.x, y: a.y - b.y })
 const scale = (a: Vec2, k: number): Vec2 => ({ x: a.x * k, y: a.y * k })
-const len = (a: Vec2): number => Math.hypot(a.x, a.y)
-
-/** Точка кадра, не зеркальная → экран: зеркальный x, рабочая зона растягивается на весь экран. */
-export function boxToScreen(p: Vec2, box: PointerBox = POINTER_BOX): Vec2 {
-  const left = Math.min(1 - box.w, Math.max(0, box.cx - box.w / 2))
-  const top = Math.min(1 - box.h, Math.max(0, box.cy - box.h / 2))
-  return { x: clamp01((1 - p.x - left) / box.w), y: clamp01((p.y - top) / box.h) }
-}
-
-/** Рабочая зона с центром в точке кадра, например там, где рука лежала при калибровке. */
-export function boxAround(center: Vec2, base: PointerBox = POINTER_BOX): PointerBox {
-  return { ...base, cx: 1 - center.x, cy: center.y }
-}
 
 /** Поводок: out догоняет target, только если тот дальше радиуса. */
-export function leash(out: Vec2 | undefined, target: Vec2, radius: number): Vec2 {
-  if (!out) return target
+export function leash(out: Vec2, target: Vec2, radius: number): Vec2 {
   const d = sub(target, out)
-  const dist = len(d)
+  const dist = Math.hypot(d.x, d.y)
   return dist <= radius ? out : add(out, scale(d, 1 - radius / dist))
 }
 
-function bleed(offset: Vec2, moved: number, k: number): Vec2 {
-  return scale(offset, Math.max(0, 1 - moved * k))
+/** Усиление по скорости: плавно от gainMin до gainMax. */
+export function gainFor(speed: number, p: PointerParams = DEFAULT_POINTER): number {
+  const k = clamp01(speed / p.gainSpeed)
+  const eased = k * k * (3 - 2 * k)
+  return p.gainMin + (p.gainMax - p.gainMin) * eased
 }
 
-/** Выход из заморозки: смещение подбирается так, чтобы курсор не прыгнул. */
-function thaw(s: PointerState, mapped: Vec2): Vec2 {
-  return s.freeze ? add(s.offset, sub(s.freeze.mapped, mapped)) : s.offset
+function freezeNow(s: PointerState, ctx: PointerContext, t: number, p: PointerParams): boolean {
+  if (!ctx.transitioning || s.freezeSpent) return false
+  return s.freezeSince === undefined || t - s.freezeSince < p.freezeMaxMs
 }
 
+/** raw — центр ладони в кадре, не зеркальный. */
 export function stepPointer(
   s: PointerState,
   raw: Vec2,
@@ -110,21 +111,19 @@ export function stepPointer(
   ctx: PointerContext,
   p: PointerParams = DEFAULT_POINTER,
 ): { state: PointerState; screen: Vec2 } {
-  const mapped = boxToScreen(raw, p.box)
-  const withinFreeze = !s.freeze || t - s.freeze.since < p.freezeMaxMs
-  if (ctx.transitioning && s.out && !s.freezeSpent && withinFreeze) {
-    // Точка отсчёта — последний кадр до заморозки, иначе сдвиг первого кадра перехода потеряется.
-    const freeze = s.freeze ?? { since: t, mapped: s.lastMapped ?? mapped }
-    return { state: { ...s, freeze, lastMapped: mapped }, screen: s.out }
-  }
-  const moved = s.lastMapped ? len(sub(mapped, s.lastMapped)) : 0
-  const offset = bleed(thaw(s, mapped), moved, p.offsetBleed)
-  const target = add(mapped, offset)
-  const filterParams = ctx.holding ? p.holdFilter : p.freeFilter
-  const filter = oneEuro2DStep(s.filter, target, t, filterParams)
-  const smooth = oneEuro2DValue(filter)
-  const leashed = leash(s.out, smooth, ctx.holding ? p.leashHold : p.leashFree)
-  const out = { x: clamp01(leashed.x), y: clamp01(leashed.y) }
-  const freezeSpent = ctx.transitioning && (s.freezeSpent || s.freeze !== undefined)
-  return { state: { filter, out, lastMapped: mapped, offset, freeze: undefined, freezeSpent }, screen: out }
+  const filter = oneEuro2DStep(s.filter, { x: 1 - raw.x, y: raw.y }, t, ctx.holding ? p.holdFilter : p.freeFilter)
+  const hand = oneEuro2DValue(filter)
+  const frozen = freezeNow(s, ctx, t, p)
+  const base = { ...s, filter, hand, t, engaged: ctx.engaged }
+  if (frozen) return { state: { ...base, freezeSince: s.freezeSince ?? t }, screen: s.out }
+  const freezeSpent = ctx.transitioning && (s.freezeSpent || s.freezeSince !== undefined)
+  const moved = s.hand && s.t !== undefined && ctx.engaged && s.engaged ? sub(hand, s.hand) : undefined
+  const dt = s.t !== undefined ? Math.max(1, t - s.t) / 1000 : 1
+  const speed = moved ? Math.hypot(moved.x, moved.y) / dt : 0
+  const target = moved ? clampPoint(add(s.target, scale(moved, gainFor(speed, p)))) : s.target
+  const radius = ctx.holding ? p.leashHold : p.leashFree
+  // У края экрана поводок не должен мешать дойти до самого края.
+  const atEdge = target.x <= 0 || target.x >= 1 || target.y <= 0 || target.y >= 1
+  const out = clampPoint(atEdge ? target : leash(s.out, target, radius))
+  return { state: { ...base, target, out, freezeSince: undefined, freezeSpent }, screen: out }
 }

@@ -3,7 +3,6 @@ import { InputEmitter } from '../shared/emitter'
 import {
   CALIBRATION_PROMPTS,
   calibrationProgress,
-  median,
   startCalibration,
   stepCalibration,
   type CalibrationResult,
@@ -16,16 +15,14 @@ import { assignHandIds, type RawHand } from './landmarks'
 import {
   initialPipeline,
   processFrame,
-  withPointerBox,
   withThresholds,
   type HandDebug,
   type OutEvent,
   type PipelineState,
 } from './pipeline'
-import { boxAround, type PointerBox } from './pointer'
 import { initialStats, stepStats, type FrameStats } from './stats'
 import { HandTracker, runVideoLoop, type Delegate, type TrackerOptions } from './tracker'
-import type { Thresholds, Vec2 } from './types'
+import type { Thresholds } from './types'
 
 /** Источник ввода с веб-камеры. Реализует контракт InputSource, плюс отладка и калибровка для демо и S4. */
 
@@ -34,8 +31,6 @@ export interface CameraInputOptions extends TrackerOptions {
   readonly video?: HTMLVideoElement
   /** Пороги после прошлой калибровки. */
   readonly thresholds?: Thresholds
-  /** Рабочая зона курсора после прошлой калибровки. */
-  readonly pointerBox?: PointerBox
 }
 
 export interface FrameInfo {
@@ -59,8 +54,6 @@ type Listener<T> = (v: T) => void
 
 interface CalibrationJob {
   state: CalibrationState | undefined
-  /** Центры ладони на шаге «открытая ладонь»: по ним ставится рабочая зона курсора. */
-  readonly centers: Vec2[]
   readonly onProgress: Listener<CalibrationProgress> | undefined
   readonly resolve: (r: CalibrationResult) => void
   readonly reject: (e: Error) => void
@@ -79,7 +72,7 @@ export class CameraInput implements InputSource {
 
   constructor(private readonly opts: CameraInputOptions = {}) {
     this.videoEl = opts.video ?? document.createElement('video')
-    this.pipeline = initialPipeline(opts.thresholds ?? DEFAULT_THRESHOLDS, opts.pointerBox)
+    this.pipeline = initialPipeline(opts.thresholds ?? DEFAULT_THRESHOLDS)
   }
 
   on: InputSource['on'] = (type, fn) => this.em.on(type, fn)
@@ -125,26 +118,17 @@ export class CameraInput implements InputSource {
     this.pipeline = withThresholds(this.pipeline, th)
   }
 
-  get pointerBox(): PointerBox {
-    return this.pipeline.box
-  }
-
-  /** Рабочая зона кадра, растягиваемая на экран. Калибровка ставит её вокруг удобного положения руки. */
-  setPointerBox(box: PointerBox): void {
-    this.pipeline = withPointerBox(this.pipeline, box)
-  }
-
   /** Подписка на отладочные данные каждого кадра. */
   onFrame(fn: Listener<FrameInfo>): Unsubscribe {
     this.frameListeners.add(fn)
     return () => this.frameListeners.delete(fn)
   }
 
-  /** Калибровка: «Покажи открытую ладонь», затем «Сожми кулак». При успехе пороги применяются сразу. */
+  /** Калибровка щипка: пальцы разведены, затем сомкнуты. При успехе пороги применяются сразу. */
   calibrate(onProgress?: Listener<CalibrationProgress>): Promise<CalibrationResult> {
     this.calibration?.reject(new Error('Калибровка запущена заново'))
     return new Promise((resolve, reject) => {
-      this.calibration = { state: undefined, centers: [], onProgress, resolve, reject }
+      this.calibration = { state: undefined, onProgress, resolve, reject }
     })
   }
 
@@ -168,24 +152,16 @@ export class CameraInput implements InputSource {
     this.em.emit(ev.type, ev.e as never)
   }
 
-  private centerPointerBox(centers: readonly Vec2[]): void {
-    if (centers.length === 0) return
-    const center = { x: median(centers.map((c) => c.x)), y: median(centers.map((c) => c.y)) }
-    this.setPointerBox(boxAround(center, this.pipeline.box))
-  }
-
   private stepCalibrationJob(t: number, hands: readonly HandDebug[]): void {
     const job = this.calibration
     if (!job) return
     const hand = hands.find((h) => h.hand === 'right') ?? hands[0]
-    const state = stepCalibration(job.state ?? startCalibration(t), t, hand?.features.closure)
+    const state = stepCalibration(job.state ?? startCalibration(t), t, hand?.features.pinch)
     job.state = state
-    if (state.step === 'open' && hand) job.centers.push(hand.features.center)
     const prompt = state.step === 'failed' ? (state.error ?? CALIBRATION_PROMPTS.failed) : CALIBRATION_PROMPTS[state.step]
     job.onProgress?.({ step: state.step, prompt, progress: calibrationProgress(state, t), error: state.error })
     if (state.step === 'done' && state.result) {
       this.setThresholds(state.result.thresholds)
-      this.centerPointerBox(job.centers)
       this.calibration = undefined
       job.resolve(state.result)
     } else if (state.step === 'failed') {

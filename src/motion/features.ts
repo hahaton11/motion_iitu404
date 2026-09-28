@@ -4,7 +4,11 @@ import {
   FINGER_EXTENDED_MAX,
   FRAME_ASPECT,
   FULL_CURL_RAD,
+  INDEX_TIP,
   MIDDLE_MCP,
+  PINCH_CLOSED_RATIO,
+  PINCH_OPEN_RATIO,
+  THUMB_TIP,
   WRIST,
 } from './constants'
 import { palmCenter } from './landmarks'
@@ -19,8 +23,12 @@ export interface HandFeatures {
   readonly curls: FingerCurlMap
   /** 0 = ладонь раскрыта, 1 = кулак. Среднее по четырём пальцам без большого. */
   readonly closure: number
-  /** Вытянут только указательный, остальные три согнуты. */
+  /** Вытянут только указательный, остальные три согнуты. Это «сцеп» трекпада. */
   readonly indexOnly: boolean
+  /** Сила щипка большим и указательным: 0 = пальцы разведены, 1 = сомкнуты. */
+  readonly pinch: number
+  /** Жест «V»: вытянуты указательный и средний, безымянный и мизинец согнуты. */
+  readonly victory: boolean
   /** Длина 0→9 в долях высоты кадра. */
   readonly palmSize: number
   /** Центр ладони в координатах кадра, не зеркальный. */
@@ -70,6 +78,19 @@ export function isIndexOnly(c: FingerCurlMap): boolean {
   return c.index < FINGER_EXTENDED_MAX && othersCurled
 }
 
+export function isVictory(c: FingerCurlMap): boolean {
+  const twoUp = c.index < FINGER_EXTENDED_MAX && c.middle < FINGER_EXTENDED_MAX
+  return twoUp && c.ring > FINGER_CURLED_MIN && c.pinky > FINGER_CURLED_MIN
+}
+
+/** Сила щипка по метрическим точкам: расстояние кончиков, отнесённое к длине ладони. */
+export function pinchStrength(world: Landmarks): number {
+  const palm = Math.hypot(...Object.values(sub(at(world, MIDDLE_MCP), at(world, WRIST))))
+  if (palm === 0) return 0
+  const ratio = Math.hypot(...Object.values(sub(at(world, THUMB_TIP), at(world, INDEX_TIP)))) / palm
+  return clamp01((PINCH_OPEN_RATIO - ratio) / (PINCH_OPEN_RATIO - PINCH_CLOSED_RATIO))
+}
+
 /** Размер ладони по длине 0→9 в долях высоты кадра. */
 export function palmSize(lm: Landmarks, aspect: number = FRAME_ASPECT): number {
   const w = at(lm, WRIST)
@@ -83,6 +104,8 @@ export function computeFeatures(det: HandDetection): HandFeatures {
     curls,
     closure: closureOf(curls),
     indexOnly: isIndexOnly(curls),
+    pinch: pinchStrength(det.world),
+    victory: isVictory(curls),
     palmSize: palmSize(det.landmarks),
     center: palmCenter(det.landmarks),
   }

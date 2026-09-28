@@ -2,6 +2,8 @@
 
 // Индексы точек MediaPipe Hand Landmarker.
 export const WRIST = 0
+export const THUMB_TIP = 4
+export const INDEX_TIP = 8
 export const MIDDLE_MCP = 9
 export const PALM_POINTS = [0, 5, 9, 13, 17] as const
 export const LANDMARK_COUNT = 21
@@ -22,6 +24,13 @@ export const FINGER_EXTENDED_MAX = 0.3
 /** Палец считается согнутым, если его curl выше этого значения. */
 export const FINGER_CURLED_MIN = 0.5
 
+/**
+ * Щипок: расстояние между кончиками большого и указательного, отнесённое к длине ладони 0→9.
+ * Ниже CLOSED — щипок полный, выше OPEN — пальцы разведены. Между ними сила щипка 0..1 линейно.
+ */
+export const PINCH_CLOSED_RATIO = 0.3
+export const PINCH_OPEN_RATIO = 0.8
+
 /** Соотношение ширины и высоты кадра камеры, чтобы размер ладони считался в долях высоты. */
 export const FRAME_ASPECT = 16 / 9
 
@@ -30,21 +39,21 @@ export const FRAME_ASPECT = 16 / 9
 export const EDGE_DEAD_ZONE = 0.08
 
 /**
- * Рабочая зона курсора в кадре: центр и размер в долях кадра.
- * Вся зона растягивается на экран, поэтому до углов экрана хватает движения кистью от локтя.
+ * Воздушный трекпад: курсор двигается на смещение руки, пока вытянут указательный или идёт щипок.
+ * Усиление растёт со скоростью: медленно — точно, быстро — далеко. Скорость в долях кадра в секунду.
  */
-export const POINTER_BOX = { cx: 0.5, cy: 0.5, w: 0.5, h: 0.5 } as const
-/** One Euro для свободной руки: быстрый отклик. */
+export const POINTER_GAIN_MIN = 1.4
+export const POINTER_GAIN_MAX = 3.6
+export const POINTER_GAIN_SPEED = 1.0
+/** One Euro для свободной руки: быстрый отклик. Единицы — доли кадра. */
 export const POINTER_FREE_FILTER = { minCutoff: 1.0, beta: 4, dCutoff: 1 } as const
 /** One Euro при удержании элемента: сильнее гасит дрожь, элемент не дёргается. */
-export const POINTER_HOLD_FILTER = { minCutoff: 0.35, beta: 2, dCutoff: 1 } as const
-/** Поводок: курсор сдвигается, только когда рука ушла дальше радиуса. Доли экрана. */
-export const POINTER_LEASH_FREE = 0.003
-export const POINTER_LEASH_HOLD = 0.008
-/** Максимум заморозки курсора, пока кулак сжимается или разжимается. */
-export const POINTER_FREEZE_MAX_MS = 250
-/** Насколько быстро гасится смещение после заморозки: доля смещения на единицу пути руки. */
-export const POINTER_OFFSET_BLEED = 4
+export const POINTER_HOLD_FILTER = { minCutoff: 0.5, beta: 3, dCutoff: 1 } as const
+/** Поводок: курсор сдвигается, только когда цель ушла дальше радиуса. Доли экрана. */
+export const POINTER_LEASH_FREE = 0.002
+export const POINTER_LEASH_HOLD = 0.005
+/** Максимум заморозки курсора, пока щипок смыкается или размыкается. */
+export const POINTER_FREEZE_MAX_MS = 200
 
 // One Euro filter для курсора. Единицы: доли экрана и герцы.
 export const ONE_EURO_MIN_CUTOFF = 0.8
@@ -82,6 +91,12 @@ export const LOST_FAST_SPEED = 1.5
 export const POOR_TRACKING_SCORE = 0.6
 export const POOR_TRACKING_MS = 1000
 export const NO_HAND_MS = 3000
+/** Рука выше этой доли кадра закрывает человеку экран. */
+export const HAND_TOO_HIGH_Y = 0.28
+export const HAND_TOO_HIGH_MS = 1500
+/** Рука двигается без сцепа: вероятно, человек хочет вести курсор, но не вытянул палец. */
+export const NOT_POINTING_SPEED = 0.35
+export const NOT_POINTING_MS = 900
 
 // Калибровка.
 export const CALIBRATION_STEP_MS = 2500

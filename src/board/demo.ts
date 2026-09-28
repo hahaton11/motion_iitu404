@@ -1,4 +1,6 @@
 import type { HintEvt } from '../contracts/input'
+import type { InputSource } from '../contracts/input'
+import { CameraInput } from '../motion'
 import { MouseInput } from '../shared/mouse-input'
 import { DEMO_IDEAS, demoImage } from './demo-assets'
 import { createBoard, PALETTE, type Board, type ElementKind, type NewElement } from './index'
@@ -194,10 +196,18 @@ function seed(board: Board): void {
   items.forEach((spec) => board.addElement(spec, { animate: false }))
 }
 
+/** ?input=camera подключает камеру вместо мыши и показывает превью в углу. */
+function createInput(app: HTMLElement): InputSource {
+  if (new URLSearchParams(location.search).get('input') !== 'camera') return new MouseInput(window)
+  const video = Object.assign(document.createElement('video'), { muted: true, playsInline: true, className: 'demo-cam' })
+  app.append(video)
+  return new CameraInput({ video })
+}
+
 function main(): void {
   const app = document.getElementById('app')
   if (!app) throw new Error('#app not found')
-  const input = new MouseInput(window)
+  const input = createInput(app)
   const board = createBoard(app, input)
   const text = textInput(board)
   const panel = el(
@@ -213,7 +223,9 @@ function main(): void {
   app.append(panel, hintToast(board))
   bindKeys(board)
   seed(board)
-  void input.start()
+  input.start().catch((err: unknown) =>
+    board.emitHint({ code: 'CAMERA_FAILED', message: err instanceof Error ? err.message : 'Камера недоступна, открой страницу без ?input=camera', severity: 'warn' }),
+  )
   Object.assign(window, { board })
 }
 

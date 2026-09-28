@@ -15,7 +15,7 @@
 .md-panel { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; }
 .md-card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
 .md-card h3 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
-.md-row { display: flex; justify-content: space-between; gap: 8px; font: 12px/1.6 ui-monospace, monospace; }
+.md-row { display: flex; justify-content: space-between; gap: 8px; font: 12px/1.6 ui-monospace, Menlo, Consolas, monospace; }
 .md-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .md-buttons button, .md-buttons select { font: inherit; padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: #1a2336; color: var(--fg); cursor: pointer; }
 .md-buttons button:disabled { opacity: 0.45; cursor: default; }
@@ -26,7 +26,7 @@
 .md-mark { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--warn); }
 .md-mark.md-open { background: #b18cff; }
 .md-phase { font-weight: 700; }
-.md-log { font: 12px/1.5 ui-monospace, monospace; color: var(--muted); max-height: 220px; overflow: hidden; }
+.md-log { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; color: var(--muted); max-height: 220px; overflow: hidden; }
 .md-log div:first-child { color: var(--fg); }
 .md-toast { position: fixed; left: 50%; top: 20px; transform: translateX(-50%); padding: 12px 18px; border-radius: 10px; background: var(--panel); border: 1px solid var(--warn); font-size: 16px; opacity: 0; transition: opacity 200ms; pointer-events: none; z-index: 10; max-width: calc(100% - 32px); }
 .md-toast.md-show { opacity: 1; }

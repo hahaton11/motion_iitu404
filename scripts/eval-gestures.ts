@@ -7,6 +7,8 @@ import { readFileSync } from 'node:fs'
 import type { Dataset, GestureLabel } from '../src/dataset/protocol'
 import { handFeatures } from '../src/gestures/features'
 import { predictKnn, trainKnn } from '../src/gestures/knn'
+import type { Pose } from '../src/gestures/model'
+import { DEFAULT_VOTER, initialVoter, stepVoter, type BelowThreshold, type VoterParams } from '../src/gestures/voter'
 import { closureOf, fingerCurls, isIndexOnly } from '../src/motion/features'
 import type { Landmarks } from '../src/motion/types'
 
@@ -62,28 +64,34 @@ for (const th of [0.6, 0.75, 0.9]) {
   report(`kNN, порог уверенности ${th}`, raw.map((p) => ({ truth: p.truth, pred: p.confidence >= th ? p.label : 'idle' })))
 }
 
-// Сглаживание: класс засчитывается, если он победил в N кадрах из последних W внутри одной записи.
-function smooth(preds: readonly { truth: Cls; label: Cls; confidence: number; t: number }[], w: number, need: number, th: number) {
+/**
+ * Сглаживание настоящим голосователем из src/gestures/voter.ts, а не его копией:
+ * иначе оценка меряет одно, а в продукте работает другое.
+ * Запись начинается заново, когда меняется класс или в записи разрыв больше 500 мс.
+ */
+function vote(preds: readonly { truth: Cls; label: Cls; confidence: number; t: number }[], p: VoterParams) {
   const out: { truth: Cls; pred: Cls }[] = []
-  let hist: Cls[] = []
+  let s = initialVoter()
   let prevTruth: Cls | undefined
   let prevT = -Infinity
-  for (const p of preds) {
-    if (p.truth !== prevTruth || p.t - prevT > 500) hist = []
-    prevTruth = p.truth
-    prevT = p.t
-    hist = [...hist, p.confidence >= th ? p.label : 'idle'].slice(-w)
-    const counts = new Map<Cls, number>()
-    hist.forEach((c) => counts.set(c, (counts.get(c) ?? 0) + 1))
-    let pred: Cls = 'idle'
-    counts.forEach((n, c) => {
-      if (c !== 'idle' && n >= need) pred = c
-    })
-    out.push({ truth: p.truth, pred })
+  for (const row of preds) {
+    if (row.truth !== prevTruth || row.t - prevT > 500) s = initialVoter()
+    prevTruth = row.truth
+    prevT = row.t
+    s = stepVoter(s, { label: row.label as Pose, confidence: row.confidence }, p)
+    out.push({ truth: row.truth, pred: s.stable as Cls })
   }
   return out
 }
-report('kNN, порог 0.75 + 4 из 6 кадров', smooth(raw.map((p) => ({ ...p, label: p.label })), 6, 4, 0.75))
+
+const BELOW: Readonly<Record<BelowThreshold, string>> = {
+  idle: 'неуверенный кадр голосует за idle',
+  skip: 'неуверенный кадр занимает место в окне, но не голосует',
+  abstain: 'неуверенный кадр не попадает в окно',
+}
+for (const [belowThreshold, title] of Object.entries(BELOW) as [BelowThreshold, string][]) {
+  report(`4 из 6 кадров: ${title}`, vote(raw, { ...DEFAULT_VOTER, belowThreshold }))
+}
 
 // Текущие правила motion: кулак при closure > 0.75 и не указательный, указательный — indexOnly.
 const rules = test.map((r) => {

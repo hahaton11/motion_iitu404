@@ -21,7 +21,27 @@ describe('stepVoter', () => {
     expect(feed(['open', 'idle', 'point', 'open', 'idle', 'point'], s).stable).toBe('fist')
   })
 
-  it('counts low confidence frames as idle', () => {
+  /*
+   * Неуверенный кадр — это отсутствие показаний, а не показание в пользу покоя.
+   * Раньше он голосовал за idle, и поза замирала в бездействии ровно на быстром движении
+   * и на развёрнутой ладони, где уверенность падает: бросок из-за этого не собирался.
+   */
+  it('does not let low confidence frames overturn an established pose', () => {
+    const s = feed(['fist', 'fist', 'fist', 'fist', 'fist', 'fist'])
+    const noisy = Array.from({ length: 6 }, (): [Pose, number] => ['open', 0.5])
+    expect(feed(noisy, s).stable).toBe('fist')
+  })
+
+  it('leaves the initial pose alone when every frame is unconfident', () => {
     expect(feed(Array.from({ length: 6 }, (): [Pose, number] => ['fist', 0.5])).stable).toBe('idle')
+  })
+
+  /*
+   * Кадр без голоса всё же занимает место в окне, поэтому «4 из 6» остаётся окном по времени.
+   * Иначе четыре уверенных кадра, разбросанных по двум секундам, складывались бы в позу.
+   */
+  it('ages confident frames out through a long unconfident run', () => {
+    const noisy = Array.from({ length: 10 }, (): [Pose, number] => ['idle', 0.5])
+    expect(feed(['fist', 'fist', 'fist', ...noisy, 'fist']).stable).toBe('idle')
   })
 })

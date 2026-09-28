@@ -1,7 +1,7 @@
 import { LANDMARK_COUNT } from './constants'
 import { assignHandIds, type RawHand } from './landmarks'
 import { initialPipeline, processFrame, type OutEvent } from './pipeline'
-import type { Landmarks, TrackerFrame } from './types'
+import type { Landmarks, Thresholds, TrackerFrame } from './types'
 
 /**
  * Формат записанных последовательностей landmarks в test-assets/fixtures/*.json.
@@ -27,6 +27,8 @@ export interface Fixture {
   readonly frames: readonly FixtureFrame[]
   /** Ожидаемые типы событий без cursor и hint, в порядке появления. */
   readonly expected?: readonly string[]
+  /** Пороги, с которыми шла запись, если была калибровка. */
+  readonly thresholds?: Thresholds
 }
 
 const PRECISION = 1e4
@@ -75,7 +77,7 @@ export function parseFixture(json: unknown): Fixture {
 
 /** Прогон записи через pipeline. Возвращает все события. */
 export function runFixture(fx: Fixture): OutEvent[] {
-  let state = initialPipeline()
+  let state = initialPipeline(fx.thresholds)
   return fx.frames.flatMap((f) => {
     const r = processFrame(state, decodeFrame(f))
     state = r.state

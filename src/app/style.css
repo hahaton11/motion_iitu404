@@ -1,11 +1,861 @@
-:root {
-  --bg: #0b0f17;
-  --fg: #e6edf7;
-  --muted: #7d8aa3;
-  --accent: #5ad1ff;
-  color-scheme: dark;
+/* Motion Board: экраны приложения S4. Цвета, шрифт и кривые из темы доски src/board/theme.css. */
+* {
+  box-sizing: border-box;
 }
-* { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, sans-serif; overflow: hidden; }
-.log { position: fixed; left: 16px; bottom: 16px; width: min(420px, calc(100% - 32px)); max-height: 40vh; overflow: hidden; font: 12px/1.5 ui-monospace, monospace; color: var(--muted); }
-.cursor { position: fixed; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--accent); opacity: 0.55; pointer-events: none; transition: transform 80ms; }
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--mb-bg);
+  color: var(--mb-fg);
+  font: 15px/1.45 var(--mb-font);
+  color-scheme: dark;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Слои: доска, видео, экраны, угол с кнопками, подсказки и прицел */
+.app-layer,
+.app-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.app-layer {
+  z-index: 10;
+}
+
+.app-overlay {
+  z-index: 40;
+}
+
+.app-screen {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.app-screen.is-full {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow: auto;
+  pointer-events: auto;
+  background:
+    radial-gradient(1200px 800px at 50% 35%, #0d1626 0%, transparent 70%),
+    radial-gradient(900px 600px at 85% 110%, rgba(90, 209, 255, 0.07) 0%, transparent 70%),
+    var(--mb-bg);
+}
+
+.app-screen.is-full::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle at 1.5px 1.5px, var(--mb-dot) 1.2px, transparent 1.6px);
+  background-size: 32px 32px;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.app-card {
+  position: relative;
+  padding: 28px;
+  border-radius: 22px;
+  background: var(--mb-surface);
+  border: 1px solid var(--mb-line);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(12px);
+  pointer-events: auto;
+}
+
+.app-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.app-title {
+  margin: 0 0 8px;
+  font-size: 26px;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+}
+
+.app-sub {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.app-caption,
+.app-status,
+.app-tip {
+  margin: 8px 0;
+  color: var(--mb-muted);
+}
+
+.app-status[data-phase='failed'] {
+  color: var(--mb-danger);
+}
+
+.app-tip:empty {
+  display: none;
+}
+
+.app-tip {
+  color: #ffe27a;
+}
+
+/* Кнопка: мышь или удержание открытой ладони, заливка показывает прогресс удержания */
+.app-btn {
+  --dwell: 0;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 0 26px;
+  border: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  font: 700 17px/1 var(--mb-font);
+  color: #04121b;
+  background: var(--mb-accent);
+  box-shadow: 0 0 26px -6px var(--mb-accent-glow);
+  cursor: pointer;
+  transition:
+    transform 140ms var(--mb-ease-out),
+    opacity 140ms ease-out;
+}
+
+.app-btn:hover,
+.app-btn.is-aimed {
+  transform: scale(1.04);
+}
+
+.app-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+  transform: none;
+}
+
+.app-btn[hidden] {
+  display: none;
+}
+
+.app-btn-fill {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.45);
+  transform: scaleX(var(--dwell));
+  transform-origin: 0 50%;
+  pointer-events: none;
+}
+
+.app-btn-label,
+.app-btn-icon {
+  position: relative;
+}
+
+.app-btn-label:empty {
+  display: none;
+}
+
+.app-btn-icon {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.app-btn.is-ghost,
+.app-btn.is-small {
+  color: var(--mb-fg);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1.5px var(--mb-line);
+}
+
+.app-btn.is-ghost .app-btn-fill,
+.app-btn.is-small .app-btn-fill {
+  background: var(--mb-accent-soft);
+}
+
+.app-btn.is-small {
+  min-height: 48px;
+  padding: 0 18px;
+  font-size: 15px;
+}
+
+.app-btn.is-active {
+  color: var(--mb-accent);
+  box-shadow: inset 0 0 0 1.5px var(--mb-accent);
+}
+
+.app-btn.is-primary {
+  color: #04121b;
+  background: var(--mb-accent);
+}
+
+.app-btn.is-huge {
+  min-width: min(360px, 100%);
+  min-height: 96px;
+  margin: 18px 0 4px;
+  font-size: 26px;
+}
+
+.app-btn.is-huge .app-btn-icon {
+  width: 34px;
+  height: 34px;
+}
+
+/* Старт */
+.app-start {
+  width: min(620px, 100%);
+  text-align: center;
+}
+
+.app-logo {
+  margin: 0;
+  font-size: clamp(38px, 6vw, 60px);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.app-logo b {
+  color: var(--mb-accent);
+  text-shadow: 0 0 30px var(--mb-accent-glow);
+}
+
+.app-lead {
+  margin: 8px auto 0;
+  max-width: 460px;
+  font-size: 18px;
+  color: var(--mb-fg);
+  opacity: 0.85;
+}
+
+.app-switch {
+  display: flex;
+  gap: 8px;
+}
+
+/* Камера: видео крупно на экранах камеры и калибровки, мини-превью в углу на остальных */
+.app-cam {
+  position: fixed;
+  z-index: 15;
+  display: none;
+  object-fit: cover;
+  transform: scaleX(-1);
+  background: var(--mb-bg-raise);
+  border: 1px solid var(--mb-line);
+  pointer-events: none;
+}
+
+body[data-mode='camera'][data-cam='ready'] .app-cam,
+body[data-mode='camera'][data-cam='loading'] .app-cam {
+  display: block;
+  top: 16px;
+  left: 16px;
+  width: 168px;
+  height: 126px;
+  border-radius: 14px;
+  opacity: 0.85;
+}
+
+body[data-mode='camera'][data-screen='camera'] .app-cam,
+body[data-mode='camera'][data-screen='calibration'] .app-cam {
+  display: block;
+  top: 5vh;
+  left: 50%;
+  width: min(640px, 86vw);
+  height: min(45vh, 480px);
+  margin-left: calc(min(640px, 86vw) / -2);
+  border-radius: 22px;
+  opacity: 1;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+}
+
+.app-screen.is-camera,
+.app-screen.is-calibration {
+  align-items: flex-end;
+  padding-bottom: 5vh;
+}
+
+body[data-mode='mouse'] .app-screen.is-camera,
+body[data-mode='mouse'] .app-screen.is-calibration {
+  align-items: center;
+}
+
+.app-camera,
+.app-calib {
+  width: min(640px, 100%);
+  text-align: center;
+}
+
+.app-seen {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 10px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--mb-muted);
+}
+
+.app-seen[hidden] {
+  display: none;
+}
+
+.app-seen.is-on {
+  color: #3fe0b0;
+  background: rgba(63, 224, 176, 0.12);
+}
+
+.app-icon {
+  width: 26px;
+  height: 26px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}
+
+/* Калибровка */
+.app-calib-hand {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  margin: 0 auto 8px;
+  color: var(--mb-accent);
+}
+
+.app-calib-hand .app-calib-palm,
+.app-calib-hand .app-calib-fist {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 12px var(--mb-accent-glow));
+  transition: opacity 240ms ease-out;
+}
+
+.app-calib-fist {
+  opacity: 0;
+}
+
+.app-calib[data-step='open'] .app-calib-palm {
+  animation: app-spread 1.4s var(--mb-ease-out) infinite;
+}
+
+.app-calib[data-step='fist'] .app-calib-palm {
+  opacity: 0;
+}
+
+.app-calib[data-step='fist'] .app-calib-fist {
+  opacity: 1;
+  animation: app-squeeze 0.9s var(--mb-ease-out) infinite;
+}
+
+.app-calib[data-step='done'] .app-calib-hand {
+  color: #3fe0b0;
+}
+
+.app-calib[data-step='failed'] .app-calib-hand {
+  color: var(--mb-danger);
+}
+
+@keyframes app-spread {
+  0%,
+  100% {
+    transform: scale(0.92) rotate(-4deg);
+  }
+  50% {
+    transform: scale(1.06) rotate(3deg);
+  }
+}
+
+@keyframes app-squeeze {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.82);
+  }
+}
+
+.app-steps {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+  color: var(--mb-muted);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.app-calib[data-step='open'] .is-open,
+.app-calib[data-step='fist'] .is-fist {
+  color: var(--mb-accent);
+}
+
+.app-bar {
+  --p: 0;
+  height: 8px;
+  margin: 10px 0;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+.app-bar-fill {
+  height: 100%;
+  background: var(--mb-accent);
+  transform: scaleX(var(--p));
+  transform-origin: 0 50%;
+}
+
+/* Досочные экраны: карточки сверху по центру, угол слева под мини-камерой */
+.app-screen.is-hud > .app-card {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(720px, calc(100vw - 440px));
+  min-width: 420px;
+  padding: 14px 18px;
+  border-radius: 18px;
+}
+
+.app-corner {
+  position: fixed;
+  z-index: 20;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+body[data-mode='camera'][data-cam='ready'] .app-corner,
+body[data-mode='camera'][data-cam='loading'] .app-corner {
+  top: 152px;
+}
+
+body[data-mode='camera'][data-cam][data-screen='camera'] .app-corner,
+body[data-mode='camera'][data-cam][data-screen='calibration'] .app-corner {
+  top: 16px;
+}
+
+.app-corner .app-home {
+  display: none;
+}
+
+.app-corner.is-home .app-home {
+  display: inline-flex;
+}
+
+.app-sound.is-muted {
+  opacity: 0.6;
+}
+
+/* Обучение */
+.app-tut {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.app-tut-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--mb-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.app-tut-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.app-tut-dots span {
+  width: 26px;
+  height: 5px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.1);
+  transition: background 200ms ease-out;
+}
+
+.app-tut-dots span.is-done {
+  background: var(--mb-accent);
+}
+
+.app-tut-main {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.app-tut-icon {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+  background: var(--mb-accent-soft);
+  color: var(--mb-accent);
+  flex: none;
+}
+
+.app-tut-icon .app-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.app-tut-title {
+  margin: 0;
+  font-size: 20px;
+}
+
+.app-tut-text {
+  margin: 2px 0 0;
+  font-size: 16px;
+}
+
+.app-tut-note {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--mb-muted);
+}
+
+.app-tut-note:empty {
+  display: none;
+}
+
+.app-tut > .app-btn {
+  align-self: flex-end;
+}
+
+.app-tut.is-done .app-tut-icon {
+  color: #3fe0b0;
+  background: rgba(63, 224, 176, 0.14);
+}
+
+/* Зоны в мировом слое доски */
+.app-zone {
+  position: absolute;
+  border-radius: 22px;
+  border: 2px dashed color-mix(in srgb, var(--mb-accent) 60%, transparent);
+  background: color-mix(in srgb, var(--mb-accent) 5%, transparent);
+  pointer-events: none;
+}
+
+.app-zone.is-danger {
+  border-color: color-mix(in srgb, var(--mb-danger) 60%, transparent);
+  background: color-mix(in srgb, var(--mb-danger) 6%, transparent);
+}
+
+.app-zone-title {
+  position: absolute;
+  top: 12px;
+  left: 18px;
+  font-size: 22px;
+  font-weight: 750;
+  color: var(--mb-accent);
+}
+
+.app-zone.is-danger .app-zone-title {
+  color: var(--mb-danger);
+}
+
+.app-zone-note {
+  position: absolute;
+  top: 42px;
+  left: 18px;
+  font-size: 14px;
+  color: var(--mb-muted);
+}
+
+/* Челлендж и свободная доска */
+.app-ch,
+.app-free {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.app-ch-text,
+.app-free-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.app-ch-title {
+  font-weight: 750;
+  font-size: 16px;
+}
+
+.app-ch-task,
+.app-ch-stats,
+.app-free-status {
+  font-size: 13px;
+  color: var(--mb-muted);
+}
+
+.app-ch-stats {
+  color: var(--mb-fg);
+  opacity: 0.8;
+}
+
+.app-timer {
+  min-width: 86px;
+  font: 800 34px/1 ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  color: var(--mb-accent);
+  text-align: center;
+}
+
+.app-timer.is-low {
+  color: var(--mb-danger);
+  animation: app-pulse 1s ease-in-out infinite;
+}
+
+@keyframes app-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* Финал */
+.app-final {
+  width: min(1180px, 100%);
+  max-height: 100%;
+  overflow: auto;
+}
+
+.app-final-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 24px;
+}
+
+.app-final-board {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.app-final-img {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: contain;
+  border-radius: 14px;
+  background: var(--mb-bg);
+  border: 1px solid var(--mb-line);
+}
+
+.app-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.app-stat {
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  text-align: center;
+}
+
+.app-stat-value {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--mb-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.app-stat-label {
+  font-size: 12px;
+  color: var(--mb-muted);
+}
+
+.app-mistake {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 226, 122, 0.08);
+  border: 1px solid rgba(255, 226, 122, 0.2);
+}
+
+.app-mistake-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--mb-muted);
+}
+
+.app-mistake-title {
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.app-mistake-advice {
+  color: #ffe27a;
+}
+
+.app-records {
+  margin-top: 14px;
+}
+
+.app-nicks {
+  justify-content: flex-start;
+}
+
+.app-nicks[hidden] {
+  display: none;
+}
+
+.app-rec-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-rec-table th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--mb-muted);
+  padding: 4px 6px;
+}
+
+.app-rec-table td {
+  padding: 5px 6px;
+  border-top: 1px solid var(--mb-line);
+}
+
+.app-rec-table tr.is-current td {
+  color: var(--mb-accent);
+  font-weight: 700;
+}
+
+.app-rec-score {
+  font-weight: 700;
+}
+
+.app-final-actions {
+  margin-top: 18px;
+}
+
+/* Подсказка у прицела */
+.app-hint {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 340px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--mb-surface);
+  border: 1px solid var(--mb-line);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  font-size: 15px;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 160ms ease-out;
+}
+
+.app-hint.is-on {
+  opacity: 1;
+}
+
+.app-hint-icon {
+  color: var(--mb-accent);
+}
+
+.app-hint[data-severity='warn'] {
+  border-color: rgba(255, 138, 122, 0.5);
+}
+
+.app-hint[data-severity='warn'] .app-hint-icon {
+  color: var(--mb-danger);
+}
+
+/* Прицел приложения на экранах без доски */
+.app-cursors.is-off {
+  display: none;
+}
+
+body[data-mode='mouse'] .app-cursors {
+  display: none;
+}
+
+.app-cursor {
+  position: absolute;
+  left: -9px;
+  top: -9px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--mb-accent);
+  box-shadow: 0 0 16px 3px var(--mb-accent-glow);
+  opacity: 0.8;
+  transition: opacity 120ms ease-out;
+}
+
+.app-cursor.is-fist {
+  background: #fff;
+}
+
+.app-cursor.is-hidden {
+  opacity: 0;
+}
+
+@media (max-width: 900px) {
+  .app-final-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .app-screen.is-hud > .app-card {
+    width: calc(100vw - 32px);
+    min-width: 0;
+    top: auto;
+    bottom: calc(12vh + 12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-calib-hand *,
+  .app-timer.is-low {
+    animation: none !important;
+  }
+}

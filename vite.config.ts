@@ -12,6 +12,7 @@ export default defineConfig({
         main: page('./index.html'),
         motion: page('./motion.html'),
         board: page('./board.html'),
+        pocket: page('./pocket.html'),
       },
     },
   },

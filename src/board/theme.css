@@ -75,10 +75,16 @@
   inset: 0;
 }
 
+/*
+ * Тень лежащего элемента — радиальный градиент, а не filter: blur.
+ * Размытие на каждом из полусотни элементов заставляет компоновщик
+ * пересчитывать их на каждом кадре панорамы и зума: 41 FPS против 55.
+ * Замер: npx tsx scripts/measure-fps.ts
+ */
 .mb-shadow {
+  --mb-shadow-fill: radial-gradient(closest-side, var(--mb-shadow), transparent);
   border-radius: 12px;
-  background: var(--mb-shadow);
-  filter: blur(12px);
+  background: var(--mb-shadow-fill);
   opacity: 0.32;
   transform: translate3d(0, 5px, 0) scale(0.94);
   transition:
@@ -86,7 +92,10 @@
     opacity 220ms var(--mb-ease-out);
 }
 
+/* Поднятых элементов на доске один-два, им настоящее размытие по карману. */
 .mb-el.is-lifted .mb-shadow {
+  --mb-shadow-fill: var(--mb-shadow);
+  filter: blur(12px);
   opacity: 0.62;
   transform: translate3d(0, 26px, 0) scale(1.06);
   transition-duration: 160ms;
@@ -188,7 +197,7 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: var(--mb-shadow);
+  background: var(--mb-shadow-fill);
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
 }
 

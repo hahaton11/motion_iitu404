@@ -30,7 +30,7 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
   {
     id: 'move',
     title: 'Возьми и перенеси',
-    instruction: 'Сожми кулак на стикере, перенеси его в рамку справа и раскрой ладонь',
+    instruction: 'Стикер уже в фокусе. Сожми кулак, махни вправо — стикер переедет в рамку, раскрой ладонь',
     note: 'Над стикером появится тень, значит он у тебя в руке',
     icon: 'fist',
     spawn: { x: -300, y: -30 },
@@ -48,14 +48,14 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
   {
     id: 'take',
     title: 'Достань из кармана',
-    instruction: 'Задержи открытую ладонь над карманом внизу, затем сожми кулак над карточкой',
+    instruction: 'Махни вниз, чтобы перейти в карман, подожди, пока он раскроется, выбери карточку взмахами вбок и сожми кулак',
     note: 'Заготовки с замком не кончаются, достаётся копия',
     icon: 'pocket',
   },
   {
     id: 'put',
     title: 'Положи обратно',
-    instruction: 'Опусти элемент в карман внизу и раскрой ладонь, не бросая',
+    instruction: 'Держи элемент кулаком, махни вниз — он опустится в карман, раскрой ладонь, не бросая',
     note: 'Карман запоминает элементы и после перезагрузки',
     icon: 'palm',
     spawn: { x: -40, y: -30 },
@@ -64,14 +64,14 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
 ]
 
 export const TUTORIAL_HINTS = {
-  DROP_IN_FRAME: { code: 'TUT_DROP_IN_FRAME', message: 'Отпусти стикер внутри рамки справа', severity: 'info' },
-  NO_THROW: { code: 'TUT_NO_THROW', message: 'Веди стикер плавно: резкий бросок удаляет его', severity: 'warn' },
+  DROP_IN_FRAME: { code: 'TUT_DROP_IN_FRAME', message: 'Махни вправо с зажатым кулаком, чтобы стикер встал в рамку', severity: 'info' },
+  NO_THROW: { code: 'TUT_NO_THROW', message: 'Не раскрывай ладонь на ходу: так стикер выбрасывается', severity: 'warn' },
   KEEP_ON_BOARD: { code: 'TUT_KEEP_ON_BOARD', message: 'Перенеси стикер в рамку, а не в карман', severity: 'info' },
   THROW_FASTER: { code: 'TUT_THROW_FASTER', message: 'Махни рукой резче и раскрой ладонь на ходу', severity: 'warn' },
   THROW_NOT_POCKET: { code: 'TUT_THROW_NOT_POCKET', message: 'Брось стикер в сторону: над карманом он сохраняется', severity: 'info' },
-  OPEN_POCKET: { code: 'TUT_OPEN_POCKET', message: 'Задержи открытую ладонь над карманом внизу, чтобы он открылся', severity: 'info' },
+  OPEN_POCKET: { code: 'TUT_OPEN_POCKET', message: 'Махни вниз и подожди, карман раскроется сам', severity: 'info' },
   PUT_NO_THROW: { code: 'TUT_PUT_NO_THROW', message: 'Не бросай: опусти элемент в карман и раскрой ладонь', severity: 'warn' },
-  PUT_LOWER: { code: 'TUT_PUT_LOWER', message: 'Опусти элемент ниже, в карман внизу экрана', severity: 'info' },
+  PUT_LOWER: { code: 'TUT_PUT_LOWER', message: 'Махни вниз с элементом в кулаке, чтобы опустить его в карман', severity: 'info' },
 } as const satisfies Record<string, HintEvt>
 
 export type TutorialEvent =

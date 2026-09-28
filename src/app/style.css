@@ -859,3 +859,8 @@ body[data-mode='mouse'] .app-cursors {
     animation: none !important;
   }
 }
+
+/* Управление фокусом: курсора нет, обратную связь даёт подсветка элемента в фокусе. */
+body[data-nav="focus"] .mb-cursor {
+  opacity: 0 !important;
+}

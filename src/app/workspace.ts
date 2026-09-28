@@ -1,6 +1,7 @@
 import { createBoard, type Board } from '../board'
 import { createPocket, type Pocket } from '../pocket'
 import { createVoice, type Voice } from '../voice'
+import { FocusInput } from './focus-input'
 import { el, text } from './dom'
 import type { HintToaster } from './hint-view'
 import type { InputHub } from './input-hub'
@@ -27,11 +28,24 @@ export interface WorkspaceDeps {
   readonly hints: HintToaster
 }
 
+/** Рамки привязки каждой доски: к ним прилипает элемент при переносе взмахом. */
+const decorRects = new WeakMap<Board, Set<WorldRect>>()
+
+/** Управление фокусом и взмахами: всегда с камерой, с мышью по ?nav=focus для отладки. */
+export function focusNavEnabled(): boolean {
+  return document.body.dataset.mode === 'camera' || new URLSearchParams(location.search).get('nav') === 'focus'
+}
+
 export function createWorkspace(deps: WorkspaceDeps, opts: { readonly prep: boolean }): Workspace {
   const { hub, sound, hints } = deps
-  const board = createBoard(deps.host, hub.board)
-  const pocket = createPocket(board.layers.overlay, hub.board, board, { prepToggle: opts.prep })
-  const voice = createVoice(board, hub.board)
+  const focus = focusNavEnabled() ? new FocusInput(hub.board) : undefined
+  const input = focus ?? hub.board
+  document.body.dataset.nav = focus ? 'focus' : 'cursor'
+  const board = createBoard(deps.host, input)
+  decorRects.set(board, new Set())
+  const pocket = createPocket(board.layers.overlay, input, board, { prepToggle: opts.prep })
+  focus?.attach({ board, overlay: board.layers.overlay, snapRects: () => [...(decorRects.get(board) ?? [])] })
+  const voice = createVoice(board, input)
   const offs = [
     board.on('hint', (h) => hints.offer(h)),
     board.on('grab', () => {
@@ -57,6 +71,7 @@ export function createWorkspace(deps: WorkspaceDeps, opts: { readonly prep: bool
       voice.destroy()
       pocket.destroy()
       board.destroy()
+      focus?.stop()
     },
   }
 }
@@ -88,5 +103,10 @@ export function addDecor(board: Board, items: readonly Decor[]): () => void {
     return node
   })
   board.layers.world.prepend(...nodes)
-  return () => nodes.forEach((n) => n.remove())
+  const rects = decorRects.get(board)
+  items.forEach((d) => rects?.add(d.rect))
+  return () => {
+    nodes.forEach((n) => n.remove())
+    items.forEach((d) => rects?.delete(d.rect))
+  }
 }

@@ -1,11 +1,13 @@
-import type { InputSource } from '../contracts/input'
+import type { InputSource, SwipeDir } from '../contracts/input'
 import { POINT_HOLD_MS, THROW_SPEED } from './constants'
 import { InputEmitter } from './emitter'
 import { VelocityTracker, speedOf } from './velocity'
 
+const ARROWS: Readonly<Record<string, SwipeDir>> = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' }
+
 /**
  * Эмулятор жестов мышью с тем же контрактом, что у камеры.
- * ЛКМ = grab/release, резкий бросок = throw, колесо = zoom, Shift+ЛКМ удержание = point.
+ * ЛКМ = grab/release, резкий бросок = throw, колесо = zoom, Shift+ЛКМ удержание = point, стрелки = взмахи.
  * Рука всегда 'right'.
  */
 export class MouseInput implements InputSource {
@@ -25,6 +27,16 @@ export class MouseInput implements InputSource {
     this.listen('pointerup', (e) => this.onUp(e as PointerEvent))
     this.listen('wheel', (e) => this.onWheel(e as WheelEvent), { passive: false })
     this.listen('pointerleave', () => this.em.emit('handlost', { hand: 'right' }))
+    const onKey = (e: KeyboardEvent): void => this.onKey(e)
+    window.addEventListener('keydown', onKey)
+    this.disposers.push(() => window.removeEventListener('keydown', onKey))
+  }
+
+  private onKey(e: KeyboardEvent): void {
+    const dir = ARROWS[e.key]
+    if (!dir || e.repeat) return
+    e.preventDefault()
+    this.em.emit('swipe', { hand: 'right', dir, holding: this.holding })
   }
 
   stop(): void {

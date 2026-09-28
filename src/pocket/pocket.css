@@ -1,0 +1,280 @@
+/* Карман S3. Анимируются только transform и opacity. Цвета и шрифт из темы доски. */
+.pk-back,
+.pk-front {
+  --pk-h: 12vh;
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: calc(100% - 24px);
+  height: var(--pk-h);
+  transform: translate3d(-50%, 46%, 0);
+  transition:
+    transform 260ms var(--mb-ease-out),
+    opacity 260ms var(--mb-ease-out);
+  pointer-events: none;
+}
+
+/* Задняя стенка: тёмная глубина под элементами доски */
+.pk-back {
+  opacity: 0.45;
+}
+
+.pk-back-inner {
+  position: absolute;
+  inset: 0;
+  border-radius: 26px 26px 0 0;
+  background:
+    radial-gradient(70% 120% at 50% 110%, rgba(90, 209, 255, 0.18) 0%, transparent 70%),
+    linear-gradient(180deg, #03060b 0%, #0a1120 100%);
+  box-shadow:
+    inset 0 18px 30px -12px rgba(0, 0, 0, 0.9),
+    0 0 0 1px var(--mb-line);
+}
+
+/* Передний край: за него «ныряют» элементы */
+.pk-front {
+  height: calc(var(--pk-h) * 0.62);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 22px;
+  border-radius: 22px 22px 0 0;
+  background:
+    linear-gradient(180deg, rgba(90, 209, 255, 0.12) 0%, transparent 40%),
+    var(--mb-surface);
+  border: 1px solid var(--mb-line);
+  border-bottom: 0;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(10px);
+  color: var(--mb-fg);
+  font-family: var(--mb-font);
+  opacity: 0.6;
+  transform: translate3d(-50%, 30%, 0);
+  overflow: hidden;
+}
+
+.pk-front::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 1.5px 0 var(--mb-accent),
+    0 0 36px 4px var(--mb-accent-glow);
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+
+.pk-title {
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+}
+
+.pk-badge {
+  min-width: 24px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--mb-accent-soft);
+  color: var(--mb-accent);
+  font-weight: 700;
+  font-size: 13px;
+  text-align: center;
+}
+
+.pk-label {
+  color: var(--mb-muted);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Полоска ожидания открытия: заполняется за OPEN_DWELL_MS */
+.pk-dwell {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  background: var(--mb-accent);
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+  opacity: 0;
+}
+
+.pk-front.is-dwell .pk-dwell {
+  opacity: 1;
+  transform: scaleX(1);
+  transition: transform 400ms linear;
+}
+
+.pk-back.is-dwell,
+.pk-back.is-near,
+.pk-front.is-dwell,
+.pk-front.is-near {
+  opacity: 0.9;
+  transform: translate3d(-50%, 18%, 0);
+}
+
+.pk-back.is-open,
+.pk-back.is-armed,
+.pk-front.is-open,
+.pk-front.is-armed {
+  opacity: 1;
+  transform: translate3d(-50%, 0, 0);
+}
+
+.pk-front.is-armed::before {
+  opacity: 1;
+}
+
+.pk-front.is-armed .pk-label,
+.pk-front.is-open .pk-label {
+  color: var(--mb-fg);
+}
+
+.pk-front.is-near::before {
+  opacity: 0.45;
+}
+
+.pk-front.is-gulp {
+  animation: pk-gulp 420ms var(--mb-ease-spring);
+}
+
+@keyframes pk-gulp {
+  0% {
+    transform: translate3d(-50%, 0, 0) scale(1);
+  }
+  35% {
+    transform: translate3d(-50%, 8%, 0) scale(1.03, 0.94);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0) scale(1);
+  }
+}
+
+.pk-back.is-disabled,
+.pk-front.is-disabled,
+.pk-fan.is-disabled {
+  opacity: 0;
+}
+
+/* Веер */
+.pk-fan {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.pk-card {
+  --x: 0px;
+  --y: 0px;
+  --r: 0deg;
+  --s: 0.5;
+  --pk-card: 120;
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 16px;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.07) 0%, transparent 45%),
+    var(--mb-bg-raise);
+  border: 1px solid var(--mb-line);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transform: translate3d(var(--x), var(--y), 0) rotate(var(--r)) scale(var(--s));
+  transition:
+    transform 300ms var(--mb-ease-spring),
+    opacity 200ms ease-out;
+}
+
+.pk-card::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  box-shadow:
+    0 0 0 2px var(--mb-accent),
+    0 0 26px 4px var(--mb-accent-glow);
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.pk-fan.is-open .pk-card {
+  --s: 1;
+  opacity: 1;
+}
+
+.pk-fan.is-open .pk-card.is-hot {
+  --s: 1.14;
+  z-index: 1;
+}
+
+.pk-card.is-hot::after {
+  opacity: 1;
+}
+
+.pk-thumb {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(calc(var(--pk-card) * var(--pk-thumb-k)));
+  pointer-events: none;
+}
+
+.pk-thumb .mb-el {
+  transition: none;
+}
+
+.pk-thumb .mb-shadow {
+  opacity: 0.25;
+}
+
+.pk-lock {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(6, 9, 15, 0.8);
+  box-shadow: 0 0 0 1px var(--mb-line);
+}
+
+.pk-lock svg {
+  width: 13px;
+  height: 13px;
+  fill: var(--mb-muted);
+}
+
+.pk-more {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--mb-surface);
+  border: 1px solid var(--mb-line);
+  color: var(--mb-muted);
+  font: 600 12px/1 var(--mb-font);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translate3d(var(--x, 0px), var(--y, 0px), 0) translate(-50%, -50%);
+  transition: opacity 180ms ease-out;
+}
+
+.pk-more.is-on {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pk-card,
+  .pk-back,
+  .pk-front {
+    transition-duration: 1ms;
+  }
+}

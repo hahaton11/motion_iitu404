@@ -464,8 +464,8 @@ body[data-mode='camera'][data-cam='loading'] .app-corner {
   top: 152px;
 }
 
-body[data-screen='camera'] .app-corner,
-body[data-screen='calibration'] .app-corner {
+body[data-mode='camera'][data-cam][data-screen='camera'] .app-corner,
+body[data-mode='camera'][data-cam][data-screen='calibration'] .app-corner {
   top: 16px;
 }
 

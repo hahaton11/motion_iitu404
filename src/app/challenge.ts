@@ -58,9 +58,9 @@ export const STICKER_SIZE = 140
 export const CHALLENGE_LIMIT_MS = 180_000
 
 export const CLUSTERS: readonly Cluster[] = [
-  { id: 'menu', title: 'Меню', rect: rect(-700, -360, -260, -30) },
-  { id: 'promo', title: 'Продвижение', rect: rect(-220, -360, 220, -30) },
-  { id: 'space', title: 'Интерьер', rect: rect(260, -360, 700, -30) },
+  { id: 'menu', title: 'Меню', rect: rect(-700, -335, -260, -30) },
+  { id: 'promo', title: 'Продвижение', rect: rect(-220, -335, 220, -30) },
+  { id: 'space', title: 'Интерьер', rect: rect(260, -335, 700, -30) },
 ]
 
 export const TRASH: WorldRect = rect(300, 0, 700, 310)
@@ -154,10 +154,14 @@ export const SCORE_PER_PERCENT = 10
 export const SCORE_PER_SECOND_LEFT = 2
 export const SCORE_PER_HINT = 5
 
-/** Очки: точность важнее всего, оставшееся время и меньше подсказок добавляют. */
+/**
+ * Очки: точность важнее всего. Бонус за оставшееся время умножается на точность,
+ * чтобы нельзя было набрать очки, сразу нажав «Готово». Подсказки немного снижают счёт.
+ */
 export function scoreOf(accuracy: number, elapsedMs: number, hints: number, limitMs = CHALLENGE_LIMIT_MS): number {
   const secondsLeft = Math.max(0, Math.round((limitMs - elapsedMs) / 1000))
-  const raw = accuracy * SCORE_PER_PERCENT + secondsLeft * SCORE_PER_SECOND_LEFT - hints * SCORE_PER_HINT
+  const timeBonus = Math.round((secondsLeft * SCORE_PER_SECOND_LEFT * accuracy) / 100)
+  const raw = accuracy * SCORE_PER_PERCENT + timeBonus - hints * SCORE_PER_HINT
   return Math.max(0, raw)
 }
 

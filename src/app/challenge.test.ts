@@ -114,6 +114,8 @@ describe('progress and helpers', () => {
     expect(scoreOf(100, 60_000, 0, 180_000)).toBe(1000 + 120 * 2)
     expect(scoreOf(100, 60_000, 2, 180_000)).toBe(1240 - 10)
     expect(scoreOf(0, 999_999, 50)).toBe(0)
+    expect(scoreOf(0, 1_000, 0, 180_000)).toBe(0)
+    expect(scoreOf(50, 60_000, 0, 180_000)).toBe(500 + 120)
   })
 
   it('time helpers', () => {

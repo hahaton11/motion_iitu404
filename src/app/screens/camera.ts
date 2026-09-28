@@ -7,6 +7,9 @@ import { el, icon, isolate, text } from '../dom'
 /** Рука считается видимой, если курсор приходил не позже этого. */
 const SEEN_MS = 600
 const POLL_MS = 250
+/** Столько ждём ответа на запрос доступа, прежде чем подсказать, где его разрешить. */
+const PROMPT_HINT_MS = 7000
+const PROMPT_HINT = 'Разреши доступ к камере во всплывающем окне браузера или выбери режим мыши'
 const INLINE_CODES: readonly MotionHintCode[] = ['TOO_FAR', 'TOO_CLOSE', 'POOR_TRACKING', 'HAND_NEAR_EDGE']
 
 const PHASE_TITLE = {
@@ -19,6 +22,7 @@ const PHASE_TITLE = {
 export function mountCamera(ctx: AppContext): ScreenHandle {
   if (ctx.cameraStatus().phase === 'off') ctx.startCamera()
   let lastSeen = -Infinity
+  const mountedAt = performance.now()
   const title = el('h2', 'app-title')
   const status = el('p', 'app-status')
   const seen = el('div', 'app-seen', icon('palm'), text('span', '', 'Подними руку в кадр ладонью к экрану'))
@@ -42,7 +46,8 @@ export function mountCamera(ctx: AppContext): ScreenHandle {
     const cam = ctx.cameraStatus()
     const visible = cam.phase === 'ready' && performance.now() - lastSeen < SEEN_MS
     title.textContent = PHASE_TITLE[cam.phase]
-    status.textContent = cam.phase === 'failed' ? (cam.message ?? '') : ''
+    const waiting = cam.phase === 'loading' && performance.now() - mountedAt > PROMPT_HINT_MS
+    status.textContent = cam.phase === 'failed' ? (cam.message ?? '') : waiting ? PROMPT_HINT : ''
     seen.classList.toggle('is-on', visible)
     seen.hidden = cam.phase !== 'ready'
     const label = seen.querySelector('span')

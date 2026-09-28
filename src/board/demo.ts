@@ -90,7 +90,7 @@ function shapesSection(board: Board, text: HTMLInputElement): HTMLElement {
 }
 
 function textInput(board: Board): HTMLInputElement {
-  const input = el('input', { className: 'demo-input', placeholder: 'Текст стикера, Enter — в выделенный' })
+  const input = el('input', { className: 'demo-input', placeholder: 'Текст стикера', title: 'Enter — записать в выделенный элемент' })
   input.addEventListener('keydown', (e) => {
     e.stopPropagation()
     const id = board.getState().selectedId
@@ -104,7 +104,7 @@ function textInput(board: Board): HTMLInputElement {
 function historySection(board: Board): HTMLElement {
   const undo = button('Отменить', () => board.undo())
   const redo = button('Вернуть', () => board.redo())
-  const stress = button(`+${STRESS_COUNT} элементов`, () => {
+  const stress = button(`+${STRESS_COUNT} штук`, () => {
     for (let i = 0; i < STRESS_COUNT; i++) board.addElement(randomSpec(i), { animate: false })
   })
   const home = button('К центру', () => board.setCamera({ x: 0, y: 0, zoom: 1 }))

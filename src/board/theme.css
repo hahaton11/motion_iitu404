@@ -1,0 +1,345 @@
+/* Motion Board: тема доски. Анимируются только transform и opacity. */
+:root {
+  --mb-bg: #06090f;
+  --mb-bg-raise: #0c1320;
+  --mb-surface: rgba(16, 24, 38, 0.82);
+  --mb-line: rgba(140, 180, 230, 0.14);
+  --mb-fg: #e6edf7;
+  --mb-muted: #7d8aa3;
+  --mb-accent: #5ad1ff;
+  --mb-accent-soft: rgba(90, 209, 255, 0.22);
+  --mb-accent-glow: rgba(90, 209, 255, 0.55);
+  --mb-danger: #ff8a7a;
+  --mb-dot: rgba(150, 185, 230, 0.2);
+  --mb-shadow: rgba(0, 0, 0, 0.75);
+  --mb-font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --mb-ease-out: cubic-bezier(0.2, 0.9, 0.3, 1);
+  --mb-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.mb-board {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(1200px 800px at 50% 35%, #0d1626 0%, transparent 70%),
+    radial-gradient(900px 600px at 85% 110%, rgba(90, 209, 255, 0.07) 0%, transparent 70%),
+    var(--mb-bg);
+  color: var(--mb-fg);
+  font-family: var(--mb-font);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  contain: strict;
+}
+
+.mb-grid {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  background-image: radial-gradient(circle at 1.5px 1.5px, var(--mb-dot) 1.2px, transparent 1.6px);
+  background-size: 32px 32px;
+  will-change: transform;
+  pointer-events: none;
+}
+
+.mb-world {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+}
+
+.mb-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Элемент: обёртка держит позицию и поворот, тело — подъём и наклон. */
+.mb-el {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 50% 50%;
+  --c: var(--mb-accent);
+}
+
+.mb-shadow,
+.mb-body,
+.mb-outline {
+  position: absolute;
+  inset: 0;
+}
+
+.mb-shadow {
+  border-radius: 12px;
+  background: var(--mb-shadow);
+  filter: blur(12px);
+  opacity: 0.32;
+  transform: translate3d(0, 5px, 0) scale(0.94);
+  transition:
+    transform 220ms var(--mb-ease-out),
+    opacity 220ms var(--mb-ease-out);
+}
+
+.mb-el.is-lifted .mb-shadow {
+  opacity: 0.62;
+  transform: translate3d(0, 26px, 0) scale(1.06);
+  transition-duration: 160ms;
+}
+
+.mb-el.is-lifted {
+  will-change: transform;
+}
+
+.mb-el.is-lifted .mb-body {
+  will-change: transform;
+}
+
+.mb-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: 50% 50%;
+}
+
+.mb-outline {
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 2px var(--mb-accent),
+    0 0 22px 2px var(--mb-accent-glow);
+  opacity: 0;
+  transition: opacity 140ms ease-out;
+  pointer-events: none;
+}
+
+.mb-el.is-hover .mb-outline {
+  opacity: 0.55;
+}
+
+.mb-el.is-selected .mb-outline {
+  opacity: 1;
+}
+
+.mb-text {
+  padding: 14px 16px;
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  overflow-wrap: anywhere;
+  overflow: hidden;
+  max-height: 100%;
+}
+
+/* Стикер */
+.mb-el[data-kind='sticky'] .mb-body {
+  border-radius: 6px 6px 18px 6px;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.35) 0%, transparent 38%),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.1) 0%, transparent 30%),
+    var(--c);
+  color: #1b1f2a;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+.mb-el[data-kind='sticky'] .mb-shadow,
+.mb-el[data-kind='sticky'] .mb-outline {
+  border-radius: 6px 6px 18px 6px;
+}
+
+.mb-el[data-kind='sticky'] .mb-text:empty::before {
+  content: 'Новая идея';
+  opacity: 0.4;
+}
+
+/* Фигуры: полупрозрачная заливка, тонкий светящийся контур */
+.mb-el[data-kind='rect'] .mb-body,
+.mb-el[data-kind='square'] .mb-body,
+.mb-el[data-kind='circle'] .mb-body {
+  border-radius: 12px;
+  background:
+    radial-gradient(120% 90% at 30% 20%, color-mix(in srgb, var(--c) 34%, transparent) 0%, transparent 70%),
+    color-mix(in srgb, var(--c) 16%, var(--mb-bg-raise));
+  border: 1.5px solid color-mix(in srgb, var(--c) 85%, white 15%);
+  box-shadow:
+    0 0 18px -6px var(--c),
+    inset 0 0 22px -12px var(--c);
+  color: var(--mb-fg);
+}
+
+.mb-el[data-kind='circle'] .mb-body,
+.mb-el[data-kind='circle'] .mb-shadow,
+.mb-el[data-kind='circle'] .mb-outline {
+  border-radius: 50%;
+}
+
+/* Треугольник рисуется SVG, тень и контур повторяют форму */
+.mb-el[data-kind='triangle'] .mb-shadow {
+  background: none;
+  border-radius: 0;
+}
+
+.mb-el[data-kind='triangle'] .mb-shadow::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--mb-shadow);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.mb-el[data-kind='triangle'] .mb-outline {
+  box-shadow: none;
+  border-radius: 0;
+  filter: drop-shadow(0 0 8px var(--mb-accent-glow));
+}
+
+.mb-tri {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.mb-tri polygon {
+  vector-effect: non-scaling-stroke;
+}
+
+.mb-body .mb-tri polygon {
+  fill: color-mix(in srgb, var(--c) 20%, var(--mb-bg-raise));
+  stroke: color-mix(in srgb, var(--c) 85%, white 15%);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.mb-outline .mb-tri polygon {
+  fill: none;
+  stroke: var(--mb-accent);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+
+.mb-el[data-kind='triangle'] .mb-text {
+  padding-top: 40%;
+  font-size: 16px;
+}
+
+/* Картинка */
+.mb-el[data-kind='image'] .mb-body {
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--mb-bg-raise);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.mb-el[data-kind='image'] img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+.mb-el[data-kind='image'] .mb-shadow,
+.mb-el[data-kind='image'] .mb-outline {
+  border-radius: 10px;
+}
+
+/* Прицел */
+.mb-cursor {
+  position: absolute;
+  left: -7px;
+  top: -7px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--mb-accent);
+  box-shadow: 0 0 14px 2px var(--mb-accent-glow);
+  opacity: 0.7;
+  transition: opacity 120ms ease-out;
+  will-change: transform;
+}
+
+.mb-cursor::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--mb-accent);
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    opacity 140ms ease-out,
+    transform 140ms var(--mb-ease-out);
+}
+
+.mb-cursor.is-over::after {
+  opacity: 0.8;
+  transform: scale(1);
+}
+
+.mb-cursor.is-hidden {
+  opacity: 0;
+}
+
+/* Плашка действий */
+.mb-toolbar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--mb-surface);
+  border: 1px solid var(--mb-line);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  transition: opacity 140ms ease-out;
+}
+
+.mb-toolbar.is-open {
+  opacity: 1;
+}
+
+.mb-tool {
+  width: 76px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  font: 600 13px/1 var(--mb-font);
+  color: var(--mb-fg);
+  background: rgba(255, 255, 255, 0.04);
+  position: relative;
+}
+
+.mb-tool::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--mb-accent-soft);
+  box-shadow: inset 0 0 0 1.5px var(--mb-accent);
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.mb-tool.is-hover::before {
+  opacity: 1;
+}
+
+.mb-tool[data-action='delete'] {
+  color: var(--mb-danger);
+}
+
+.mb-tool span {
+  position: relative;
+}

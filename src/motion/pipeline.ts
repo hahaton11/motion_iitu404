@@ -13,7 +13,8 @@ import {
   type HandPhase,
   type HandState,
 } from './hand-state'
-import { initialHints, stepHints, type HintHandInput, type HintState } from './hints'
+import { HINT_TEXTS, initialHints, stepHints, type HintHandInput, type HintState } from './hints'
+import { initialSwipe, resetSwipe, stepSwipe, type SwipeOutcome, type SwipeState } from './swipe'
 import { oneEuro2DStep, oneEuro2DValue, type OneEuro2DState } from './one-euro'
 import { DEFAULT_POINTER, boxToScreen, initialPointer, stepPointer, type PointerBox, type PointerState } from './pointer'
 import { initialTwoHands, stepTwoHands, type HandSnapshot, type TwoHandsState } from './two-hands'
@@ -32,6 +33,7 @@ interface HandTrack {
   readonly filter: OneEuro2DState | undefined
   /** Курсор, который видит пользователь. */
   readonly pointer: PointerState
+  readonly swipe: SwipeState
   /** Что знает потребитель: держит ли рука элемент по отправленным событиям. */
   readonly emittedHolding: boolean
 }
@@ -65,6 +67,7 @@ const emptyTrack = (): HandTrack => ({
   machine: initialHandState(),
   filter: undefined,
   pointer: initialPointer(),
+  swipe: initialSwipe(),
   emittedHolding: false,
 })
 
@@ -88,6 +91,7 @@ interface HandStep {
   readonly machineEvents: readonly HandEvent[]
   readonly debug: HandDebug | undefined
   readonly lostFast: boolean
+  readonly swipe?: SwipeOutcome
 }
 
 /** События машины получают координаты видимого курсора, чтобы элемент падал там, где его видно. */
@@ -107,14 +111,27 @@ function stepSeen(track: HandTrack, det: HandDetection, t: number, th: Threshold
   const screen = p.screen
   const debug: HandDebug = { hand: det.hand, detection: det, features, phase: r.state.phase, screen }
   const machineEvents = r.events.map((e) => atCursor(e, screen))
-  return { track: { ...track, machine: r.state, filter, pointer: p.state }, machineEvents, debug, lostFast: false }
+  const sw = stepSwipe(track.swipe, { t, p: motion, holding: isHoldingPhase(r.state.phase) })
+  const next = { ...track, machine: r.state, filter, pointer: p.state, swipe: sw.state }
+  return { track: next, machineEvents, debug, lostFast: false, ...(sw.outcome ? { swipe: sw.outcome } : {}) }
+}
+
+/** Взмах в событие контракта, неудачный взмах — в подсказку. Во время zoom взмахи не шлются. */
+function swipeEvents(hand: HandId, step: HandStep, suppress: boolean): OutEvent[] {
+  const o = step.swipe
+  if (!o || suppress) return []
+  if (o.kind === 'swipe') return [{ type: 'swipe', e: { hand, dir: o.dir, holding: o.holding } }]
+  const code = o.kind === 'short' ? 'SWIPE_SHORT' : 'SWIPE_DIAGONAL'
+  return [{ type: 'hint', e: { code, ...HINT_TEXTS[code], hand } }]
 }
 
 function stepMissing(track: HandTrack, t: number): HandStep {
   const speed = handSpeed(track.machine)
   const r = stepHandMissing(track.machine, t)
   const lost = r.events.some((e) => e.type === 'handlost')
-  if (!lost) return { track: { ...track, machine: r.state }, machineEvents: [], debug: undefined, lostFast: false }
+  if (!lost) {
+    return { track: { ...track, machine: r.state, swipe: resetSwipe(track.swipe) }, machineEvents: [], debug: undefined, lostFast: false }
+  }
   // Release решается по тому, что знает потребитель: во время zoom машина могла отпустить молча.
   const { x, y } = track.pointer.out ?? track.machine
   const release: HandEvent[] = track.emittedHolding ? [{ type: 'release', x, y, vx: 0, vy: 0 }] : []
@@ -197,6 +214,7 @@ export function processFrame(s: PipelineState, frame: TrackerFrame): FrameResult
     ...emitted.flatMap((x) => x.out),
     ...final.flatMap((x) => x.out),
     ...(tz.zoom ? [{ type: 'zoom', e: tz.zoom } as const] : []),
+    ...HAND_IDS.flatMap((hand, i) => swipeEvents(hand, steps[i]!, tz.suppress || tz.zoom !== undefined)),
     ...hints.hints.map((e) => ({ type: 'hint', e }) as const),
   ]
   return { state: { ...s, hands: tracks, zoom: tz.state, hints: hints.state }, events, debug }

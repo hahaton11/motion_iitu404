@@ -72,6 +72,26 @@ describe('processFrame single hand', () => {
   })
 })
 
+describe('processFrame swipes', () => {
+  const flick = (pose: FingerCurls, from: number, to: number) => [
+    ...times(4, one({ pose, x: from })),
+    ...[1, 2, 3, 4].map((i) => one({ pose, x: from + ((to - from) * i) / 4 })),
+    ...times(5, one({ pose, x: to })),
+  ]
+
+  it('emits a mirrored swipe for a fast flick of the open hand', () => {
+    const r = run(flick(POSES.open, 0.6, 0.4))
+    const swipes = r.events.filter((e) => e.type === 'swipe')
+    expect(swipes.map((e) => e.type === 'swipe' && e.e.dir)).toEqual(['right'])
+  })
+
+  it('marks swipes made with the fist closed as holding', () => {
+    const r = run(flick(POSES.fist, 0.6, 0.4))
+    const sw = r.events.find((e) => e.type === 'swipe')
+    expect(sw?.type === 'swipe' && sw.e.holding).toBe(true)
+  })
+})
+
 describe('processFrame two hands', () => {
   const both = (pose: FingerCurls, spread: number, leftPose: FingerCurls = pose): HandSpec[] => [
     { pose: leftPose, hand: 'left', x: 0.5 + spread },

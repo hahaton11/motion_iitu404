@@ -48,6 +48,16 @@ export interface ZoomEvt {
   readonly cy: number
 }
 
+export type SwipeDir = 'left' | 'right' | 'up' | 'down'
+
+/** Короткий взмах рукой. Направление на экране, уже зеркально. Приходит после завершения движения. */
+export interface SwipeEvt {
+  readonly hand: HandId
+  readonly dir: SwipeDir
+  /** Рука держала элемент во время взмаха. */
+  readonly holding: boolean
+}
+
 export interface HandLostEvt {
   readonly hand: HandId
 }
@@ -61,6 +71,8 @@ export type MotionHintCode =
   | 'HALF_RELEASE'
   | 'MOVING_TOO_FAST'
   | 'POOR_TRACKING'
+  | 'SWIPE_SHORT'
+  | 'SWIPE_DIAGONAL'
 
 /** Подсказка режима «ошибка». message — конкретное действие для исправления, на русском. */
 export interface HintEvt {
@@ -77,6 +89,7 @@ export interface InputEventMap {
   throw: ThrowEvt
   point: PointEvt
   zoom: ZoomEvt
+  swipe: SwipeEvt
   handlost: HandLostEvt
   hint: HintEvt
 }

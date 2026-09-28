@@ -61,6 +61,22 @@ export const POINT_MOVE_MAX = 0.03
 /** Рука не видна дольше этого времени → handlost. */
 export const HAND_LOST_MS = 300
 
+// Взмахи. Скорости в долях экрана в секунду, путь в долях экрана.
+/** Скорость, с которой начинается взмах, и ниже которой он заканчивается. */
+export const SWIPE_START_SPEED = 1.1
+export const SWIPE_END_SPEED = 0.45
+/** Минимальный путь взмаха. Короче, но длиннее SWIPE_HINT_MIN — подсказка «махни шире». */
+export const SWIPE_MIN_DIST = 0.14
+export const SWIPE_HINT_MIN = 0.06
+/** Главная ось должна быть во столько раз длиннее второй, иначе взмах диагональный. */
+export const SWIPE_AXIS_RATIO = 1.6
+/** Взмах длиннее по времени не считается: это уже перенос руки. */
+export const SWIPE_MAX_MS = 450
+/** После взмаха рука возвращается назад: обратное направление игнорируется это время. */
+export const SWIPE_RETURN_MS = 650
+/** Любой следующий взмах не раньше. */
+export const SWIPE_COOLDOWN_MS = 220
+
 // Zoom.
 export const ZOOM_MIN_CHANGE = 0.005
 /** Минимальное расстояние между руками, ниже которого zoom не считается, доли экрана. */

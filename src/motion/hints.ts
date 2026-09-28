@@ -24,6 +24,8 @@ export const HINT_TEXTS: Readonly<Record<MotionHintCode, Pick<HintEvt, 'message'
   TOO_CLOSE: { message: 'Отойди на шаг назад, рука не помещается в кадр', severity: 'info' },
   MOVING_TOO_FAST: { message: 'Двигай рукой чуть медленнее, камера не успевает', severity: 'warn' },
   POOR_TRACKING: { message: 'Мало света, повернись к источнику света', severity: 'info' },
+  SWIPE_SHORT: { message: 'Махни шире, примерно на полруки, чтобы перейти', severity: 'info' },
+  SWIPE_DIAGONAL: { message: 'Махни строго вбок или строго вверх-вниз', severity: 'info' },
   NO_HAND: { message: 'Подними руку перед камерой, ладонью к экрану', severity: 'info' },
 }
 

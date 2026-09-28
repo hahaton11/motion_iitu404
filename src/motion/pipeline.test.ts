@@ -92,6 +92,40 @@ describe('processFrame swipes', () => {
   })
 })
 
+describe('processFrame with classifier pose', () => {
+  type P = NonNullable<HandDetection['pose']>['label']
+  const withPose = (label: P, x = 0.5) => ({ ...det({ pose: POSES.open, x }), pose: { label, confidence: 0.95 } })
+  const runPoses = (frames: readonly (readonly [P, number?])[]) => {
+    let state: PipelineState = initialPipeline()
+    const events: OutEvent[] = []
+    frames.forEach(([label, x], i) => {
+      const r = processFrame(state, { t: i * FRAME_MS, hands: [withPose(label, x)] })
+      state = r.state
+      events.push(...r.events)
+    })
+    return events
+  }
+  const n = <T,>(k: number, v: T): T[] => Array<T>(k).fill(v)
+
+  it('grabs on a stable fist and releases only on an open palm, not on idle', () => {
+    const ev = runPoses([...n(4, ['open'] as const), ...n(6, ['fist'] as const), ...n(20, ['idle'] as const), ...n(8, ['open'] as const)])
+    expect(gestureEventTypes(ev)).toEqual(['grab', 'release'])
+  })
+
+  it('never grabs on idle frames', () => {
+    expect(gestureEventTypes(runPoses(n(60, ['idle'] as const)))).toEqual([])
+  })
+
+  it('pauses the cursor on idle and reports it as not engaged', () => {
+    const ev = runPoses([...n(8, ['open', 0.5] as const), ...Array.from({ length: 20 }, (_, i) => ['idle', 0.5 - i * 0.01] as const)])
+    const cursors = ev.filter((e) => e.type === 'cursor')
+    const last = cursors[cursors.length - 1]!
+    const beforeIdle = cursors[12]!
+    expect(last.type === 'cursor' && last.e.engaged).toBe(false)
+    expect(last.type === 'cursor' && beforeIdle.type === 'cursor' && last.e.x).toBeCloseTo(beforeIdle.type === 'cursor' ? beforeIdle.e.x : 0, 2)
+  })
+})
+
 describe('processFrame two hands', () => {
   const both = (pose: FingerCurls, spread: number, leftPose: FingerCurls = pose): HandSpec[] => [
     { pose: leftPose, hand: 'left', x: 0.5 + spread },

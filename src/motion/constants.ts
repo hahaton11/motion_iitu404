@@ -118,9 +118,11 @@ export const MIN_DETECTION_CONFIDENCE = 0.5
 export const MIN_PRESENCE_CONFIDENCE = 0.5
 export const MIN_TRACKING_CONFIDENCE = 0.5
 export const MODEL_PATH = 'models/hand_landmarker.task'
+/** Классификатор позы, обученный на датасете: scripts/build-gesture-model.ts. */
+export const GESTURE_MODEL_PATH = 'models/gestures-knn.json'
 export const WASM_PATH = 'mediapipe/wasm'
 /**
- * MediaPipe определяет handedness так, будто кадр зеркальный. Мы подаём незеркальный кадр
- * фронтальной камеры, поэтому метки меняются местами.
+ * Менять ли местами метки handedness MediaPipe. Проверено на живой записи: правая рука приходит
+ * с меткой Right при незеркальном кадре фронтальной камеры, поэтому менять не нужно.
  */
-export const SWAP_HANDEDNESS = true
+export const SWAP_HANDEDNESS = false

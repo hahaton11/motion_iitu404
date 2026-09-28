@@ -117,7 +117,8 @@ export class DemoView {
       return
     }
     const holding = d.phase === 'holding' || d.phase === 'opening'
-    set('phase', PHASE_TEXT[d.phase] ?? d.phase)
+    const pose = d.pose ? ` · поза ${d.pose}${d.detection.pose ? ` (${d.detection.pose.label} ${d.detection.pose.confidence.toFixed(2)})` : ''}` : ''
+    set('phase', `${PHASE_TEXT[d.phase] ?? d.phase}${pose}${d.paused ? ' · пауза' : ''}`)
     set('closure', d.features.closure.toFixed(2))
     set('index', d.features.indexOnly ? 'только он вытянут' : 'нет')
     set('palm', d.features.palmSize.toFixed(3))

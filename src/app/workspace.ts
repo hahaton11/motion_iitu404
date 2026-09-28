@@ -31,9 +31,9 @@ export interface WorkspaceDeps {
 /** Рамки привязки каждой доски: к ним прилипает элемент при переносе взмахом. */
 const decorRects = new WeakMap<Board, Set<WorldRect>>()
 
-/** Управление фокусом и взмахами: всегда с камерой, с мышью по ?nav=focus для отладки. */
+/** Управление фокусом и взмахами — экспериментальный режим, включается параметром ?nav=focus. */
 export function focusNavEnabled(): boolean {
-  return document.body.dataset.mode === 'camera' || new URLSearchParams(location.search).get('nav') === 'focus'
+  return new URLSearchParams(location.search).get('nav') === 'focus'
 }
 
 export function createWorkspace(deps: WorkspaceDeps, opts: { readonly prep: boolean }): Workspace {

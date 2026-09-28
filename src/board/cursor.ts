@@ -51,5 +51,7 @@ export class CursorLayer {
     // Элемент в фокусе подсвечивается сам, прицел над ним почти исчезает, чтобы не мешать.
     dot.classList.toggle('is-focus', !holding && h.hoverId !== undefined)
     dot.classList.toggle('is-over', !holding && h.hoverAction !== undefined)
+    // Бездействие: пустое кольцо показывает, что рука сейчас ничего не делает.
+    dot.classList.toggle('is-idle', !holding && h.engaged === false)
   }
 }

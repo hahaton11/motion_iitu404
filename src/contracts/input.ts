@@ -14,6 +14,11 @@ export interface CursorEvt {
   /** 0 = ладонь раскрыта, 1 = кулак. */
   readonly closure: number
   readonly holding: boolean
+  /**
+   * false — рука в бездействии, курсор стоит и действий нет. Источники без распознавания
+   * бездействия, например мышь, поле не заполняют.
+   */
+  readonly engaged?: boolean
 }
 
 export interface GrabEvt {

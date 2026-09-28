@@ -12,6 +12,8 @@ import {
 } from './calibration'
 import { closeCamera, openCamera } from './camera'
 import { DEFAULT_THRESHOLDS } from './hand-state'
+import { GestureClassifier } from '../gestures/model'
+import { GESTURE_MODEL_PATH } from './constants'
 import { assignHandIds, type RawHand } from './landmarks'
 import {
   initialPipeline,
@@ -73,6 +75,8 @@ export class CameraInput implements InputSource {
   private pipeline: PipelineState
   private stats = initialStats()
   private tracker: HandTracker | undefined
+  /** Обученный классификатор позы. Если не загрузился, работают правила по углам пальцев. */
+  private classifier: GestureClassifier | undefined
   private mediaStream: MediaStream | undefined
   private stopLoop: (() => void) | undefined
   private calibration: CalibrationJob | undefined
@@ -87,7 +91,8 @@ export class CameraInput implements InputSource {
   /** Включает камеру и модель. Бросает CameraError или TrackerLoadError с текстом для пользователя. */
   async start(): Promise<void> {
     if (this.stopLoop) return
-    const [stream, tracker] = await Promise.all([openCamera(this.videoEl), HandTracker.create(this.opts)]).catch(
+    const model = GestureClassifier.load(GESTURE_MODEL_PATH).catch(() => undefined)
+    const [stream, tracker, classifier] = await Promise.all([openCamera(this.videoEl), HandTracker.create(this.opts), model]).catch(
       (err: unknown) => {
         this.stop()
         throw err
@@ -95,6 +100,7 @@ export class CameraInput implements InputSource {
     )
     this.mediaStream = stream
     this.tracker = tracker
+    this.classifier = classifier
     this.stopLoop = runVideoLoop(this.videoEl, (t) => this.onVideoFrame(t))
   }
 
@@ -154,13 +160,24 @@ export class CameraInput implements InputSource {
     const started = performance.now()
     const raw = tracker.detect(this.videoEl, t)
     if (!raw) return
-    const r = processFrame(this.pipeline, { t, hands: assignHandIds(raw) })
+    const r = processFrame(this.pipeline, { t, hands: this.withPoses(raw) })
     this.pipeline = r.state
     r.events.forEach((ev) => this.dispatch(ev))
     this.stats = stepStats(this.stats, t, performance.now() - started)
     this.stepCalibrationJob(t, r.debug)
     const info: FrameInfo = { t, raw, hands: r.debug, thresholds: this.pipeline.thresholds, stats: this.stats, delegate: tracker.delegate }
     this.frameListeners.forEach((fn) => fn(info))
+  }
+
+  /** Руки кадра с позой от классификатора. Метка руки MediaPipe нужна признакам для зеркалирования. */
+  private withPoses(raw: readonly RawHand[]): ReturnType<typeof assignHandIds> {
+    const hands = assignHandIds(raw)
+    const c = this.classifier
+    if (!c) return hands
+    return hands.map((h) => {
+      const src = raw.find((r) => r.world === h.world)
+      return { ...h, pose: c.classify(h.world, src?.label ?? 'Right') }
+    })
   }
 
   private dispatch(ev: OutEvent): void {

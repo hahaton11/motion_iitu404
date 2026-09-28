@@ -57,6 +57,8 @@ export interface PointerContext {
   readonly holding: boolean
   /** Кулак в промежутке между порогами: сжимается или разжимается. */
   readonly transitioning: boolean
+  /** Рука в бездействии: курсор стоит, сколько угодно долго, и продолжает без скачка. */
+  readonly paused?: boolean
 }
 
 export const initialPointer = (): PointerState => ({
@@ -112,7 +114,8 @@ export function stepPointer(
 ): { state: PointerState; screen: Vec2 } {
   const mapped = boxToScreen(raw, p.box)
   const withinFreeze = !s.freeze || t - s.freeze.since < p.freezeMaxMs
-  if (ctx.transitioning && s.out && !s.freezeSpent && withinFreeze) {
+  const transitionFreeze = ctx.transitioning && !s.freezeSpent && withinFreeze
+  if ((ctx.paused || transitionFreeze) && s.out) {
     // Точка отсчёта — последний кадр до заморозки, иначе сдвиг первого кадра перехода потеряется.
     const freeze = s.freeze ?? { since: t, mapped: s.lastMapped ?? mapped }
     return { state: { ...s, freeze, lastMapped: mapped }, screen: s.out }

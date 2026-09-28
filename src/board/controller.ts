@@ -41,6 +41,8 @@ export interface HandState {
   readonly y: number
   readonly closure: number
   readonly mode: HandMode
+  /** false — рука в бездействии, курсор на паузе. undefined — источник без распознавания бездействия. */
+  readonly engaged?: boolean
   readonly hoverId?: string
   readonly hoverAction?: ToolbarAction
 }
@@ -125,7 +127,7 @@ function elementAt(ctx: StepContext, p: Point, currentId?: string): BoardElement
 function onCursor(c: ControllerState, e: CursorEvt, ctx: StepContext): StepResult {
   const prev = handOf(c, e.hand)
   const p = normToScreen(ctx.viewport, e.x, e.y)
-  const base: HandState = { ...prev, x: p.x, y: p.y, closure: e.closure }
+  const base: HandState = { ...prev, x: p.x, y: p.y, closure: e.closure, ...(e.engaged !== undefined ? { engaged: e.engaged } : {}) }
   if (prev.mode === 'hold') {
     const next = setHand(c, e.hand, base)
     return heldBy(ctx.state, e.hand) ? result(next, [{ type: 'dragTo', ...worldAt(ctx, p) }]) : result(next)

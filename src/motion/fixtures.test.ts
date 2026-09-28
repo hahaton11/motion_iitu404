@@ -13,7 +13,7 @@ const syntheticFixture = (poses: readonly FingerCurls[]): Fixture => ({
   frames: poses.map((p, i) => {
     const h = syntheticHand(p)
     // Метка 'Left' от MediaPipe соответствует правой руке пользователя в незеркальном кадре.
-    return { t: i * FRAME_MS, hands: [encodeHand({ label: 'Left', score: h.score, landmarks: h.landmarks, world: h.world })] }
+    return { t: i * FRAME_MS, hands: [encodeHand({ label: 'Right', score: h.score, landmarks: h.landmarks, world: h.world })] }
   }),
 })
 

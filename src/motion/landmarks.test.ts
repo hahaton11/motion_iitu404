@@ -74,9 +74,9 @@ describe('edgeDistance', () => {
 })
 
 describe('assignHandIds', () => {
-  it('swaps MediaPipe labels for an unmirrored frame', () => {
-    expect(assignHandIds([raw('Left', 0.3)])[0]!.hand).toBe('right')
-    expect(assignHandIds([raw('Right', 0.7)])[0]!.hand).toBe('left')
+  it('keeps MediaPipe labels as measured on a live recording', () => {
+    expect(assignHandIds([raw('Left', 0.7)])[0]!.hand).toBe('left')
+    expect(assignHandIds([raw('Right', 0.3)])[0]!.hand).toBe('right')
   })
 
   it('resolves duplicate labels by screen position', () => {

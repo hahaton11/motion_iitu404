@@ -94,3 +94,15 @@ describe('stepPointer', () => {
     expect(Math.abs(after.s.offset.y)).toBeLessThan(0.02)
   })
 })
+
+describe('stepPointer paused', () => {
+  it('holds the cursor while paused for any time and resumes without a jump', () => {
+    const PAUSED = { holding: false, transitioning: false, paused: true }
+    const a = run(Array.from({ length: 10 }, () => ({ x: 0.5, y: 0.5 })))
+    const frozenAt = a.out[a.out.length - 1]!
+    const paused = run(Array.from({ length: 60 }, (_, i) => ({ x: 0.5 - i * 0.004, y: 0.6 })), PAUSED, a.s, a.tEnd + DT)
+    paused.out.forEach((p) => expect(p).toEqual(frozenAt))
+    const resumed = run(Array.from({ length: 5 }, () => ({ x: 0.26, y: 0.6 })), FREE, paused.s, paused.tEnd + DT)
+    expect(Math.abs(resumed.out[resumed.out.length - 1]!.x - frozenAt.x)).toBeLessThan(0.02)
+  })
+})

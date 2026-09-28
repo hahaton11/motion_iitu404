@@ -13,8 +13,10 @@ import {
   type HandPhase,
   type HandState,
 } from './hand-state'
-import { HINT_TEXTS, initialHints, stepHints, type HintHandInput, type HintState } from './hints'
+import { initialHints, stepHints, type HintHandInput, type HintState } from './hints'
 import { initialSwipe, resetSwipe, stepSwipe, type SwipeOutcome, type SwipeState } from './swipe'
+import { initialVoter, stepVoter, type VoterState } from '../gestures/voter'
+import type { Pose } from '../gestures/model'
 import { oneEuro2DStep, oneEuro2DValue, type OneEuro2DState } from './one-euro'
 import { DEFAULT_POINTER, boxToScreen, initialPointer, stepPointer, type PointerBox, type PointerState } from './pointer'
 import { initialTwoHands, stepTwoHands, type HandSnapshot, type TwoHandsState } from './two-hands'
@@ -34,6 +36,8 @@ interface HandTrack {
   /** Курсор, который видит пользователь. */
   readonly pointer: PointerState
   readonly swipe: SwipeState
+  /** Сглаживание позы классификатора по кадрам. */
+  readonly voter: VoterState
   /** Что знает потребитель: держит ли рука элемент по отправленным событиям. */
   readonly emittedHolding: boolean
 }
@@ -53,6 +57,10 @@ export interface HandDebug {
   readonly features: HandFeatures
   readonly phase: HandPhase
   readonly screen: Vec2
+  /** Устойчивая поза классификатора, если он работает. */
+  readonly pose?: Pose
+  /** Курсор на паузе: рука в бездействии. */
+  readonly paused: boolean
 }
 
 export interface FrameResult {
@@ -68,6 +76,7 @@ const emptyTrack = (): HandTrack => ({
   filter: undefined,
   pointer: initialPointer(),
   swipe: initialSwipe(),
+  voter: initialVoter(),
   emittedHolding: false,
 })
 
@@ -97,22 +106,48 @@ interface HandStep {
 /** События машины получают координаты видимого курсора, чтобы элемент падал там, где его видно. */
 const atCursor = (e: HandEvent, p: Vec2): HandEvent => (e.type === 'handlost' ? e : { ...e, x: p.x, y: p.y })
 
+/** Поза → вход машины захвата. Бездействие даёт closure между порогами: состояние не меняется. */
+const POSE_SHAPE: Readonly<Record<Pose, { closure: number; indexOnly: boolean }>> = {
+  fist: { closure: 1, indexOnly: false },
+  open: { closure: 0, indexOnly: false },
+  victory: { closure: 0, indexOnly: false },
+  point: { closure: 0, indexOnly: true },
+  idle: { closure: 0.6, indexOnly: false },
+}
+
+/** Нижняя граница уверенности «почти жеста» для подсказок. */
+const NEAR_MISS_MIN = 0.4
+
+/**
+ * closure для подсказок: «почти кулак» — сырая поза fist с недостаточной уверенностью, «почти ладонь»
+ * при удержании — сырая open с недостаточной уверенностью. Иначе вне полосы, подсказок нет.
+ */
+function hintClosure(raw: NonNullable<HandDetection['pose']>, holding: boolean, th: Thresholds): number {
+  const near = raw.confidence >= NEAR_MISS_MIN && raw.confidence < 0.75
+  const inBand = (th.open + th.hold) / 2
+  if (near && raw.label === 'fist' && !holding) return inBand
+  if (near && raw.label === 'open' && holding) return inBand
+  return holding ? 1 : 0
+}
+
 function stepSeen(track: HandTrack, det: HandDetection, t: number, th: Thresholds, box: PointerBox): HandStep {
   const features = computeFeatures(det)
   const filter = oneEuro2DStep(track.filter, boxToScreen(features.center, box), t)
   const motion = oneEuro2DValue(filter)
-  const frame = { t, x: motion.x, y: motion.y, closure: features.closure, indexOnly: features.indexOnly }
-  const r = stepHand(track.machine, frame, th)
-  const ctx = {
-    holding: isHoldingPhase(track.machine.phase),
-    transitioning: features.closure > th.open && features.closure < th.hold,
-  }
-  const p = stepPointer(track.pointer, features.center, t, ctx, { ...DEFAULT_POINTER, box })
+  const holding = isHoldingPhase(track.machine.phase)
+  const voter = det.pose ? stepVoter(track.voter, det.pose) : track.voter
+  const pose = det.pose ? voter.stable : undefined
+  const shape = pose ? POSE_SHAPE[pose] : { closure: features.closure, indexOnly: features.indexOnly }
+  const r = stepHand(track.machine, { t, x: motion.x, y: motion.y, ...shape }, th)
+  const paused = pose === 'idle' && !holding
+  const transitioning = !pose && features.closure > th.open && features.closure < th.hold
+  const p = stepPointer(track.pointer, features.center, t, { holding, transitioning, paused }, { ...DEFAULT_POINTER, box })
   const screen = p.screen
-  const debug: HandDebug = { hand: det.hand, detection: det, features, phase: r.state.phase, screen }
+  const hintFeatures = det.pose ? { ...features, closure: hintClosure(det.pose, holding, th) } : features
+  const debug: HandDebug = { hand: det.hand, detection: det, features: hintFeatures, phase: r.state.phase, screen, paused, ...(pose ? { pose } : {}) }
   const machineEvents = r.events.map((e) => atCursor(e, screen))
   const sw = stepSwipe(track.swipe, { t, p: motion, holding: isHoldingPhase(r.state.phase) })
-  const next = { ...track, machine: r.state, filter, pointer: p.state, swipe: sw.state }
+  const next = { ...track, machine: r.state, filter, pointer: p.state, swipe: sw.state, voter }
   return { track: next, machineEvents, debug, lostFast: false, ...(sw.outcome ? { swipe: sw.outcome } : {}) }
 }
 
@@ -120,9 +155,8 @@ function stepSeen(track: HandTrack, det: HandDetection, t: number, th: Threshold
 function swipeEvents(hand: HandId, step: HandStep, suppress: boolean): OutEvent[] {
   const o = step.swipe
   if (!o || suppress) return []
-  if (o.kind === 'swipe') return [{ type: 'swipe', e: { hand, dir: o.dir, holding: o.holding } }]
-  const code = o.kind === 'short' ? 'SWIPE_SHORT' : 'SWIPE_DIAGONAL'
-  return [{ type: 'hint', e: { code, ...HINT_TEXTS[code], hand } }]
+  // Неудачные взмахи подсказками не сообщаются: в режиме курсора быстрые движения руки — норма.
+  return o.kind === 'swipe' ? [{ type: 'swipe', e: { hand, dir: o.dir, holding: o.holding } }] : []
 }
 
 function stepMissing(track: HandTrack, t: number): HandStep {
@@ -181,7 +215,14 @@ const snapshot = (step: HandStep): HandSnapshot | undefined =>
   step.debug ? { x: step.debug.screen.x, y: step.debug.screen.y, holding: isHoldingPhase(step.track.machine.phase) } : undefined
 
 function cursorOf(d: HandDebug, track: HandTrack): OutEvent {
-  const e = { hand: d.hand, x: d.screen.x, y: d.screen.y, closure: d.features.closure, holding: track.emittedHolding }
+  const e = {
+    hand: d.hand,
+    x: d.screen.x,
+    y: d.screen.y,
+    closure: d.features.closure,
+    holding: track.emittedHolding,
+    ...(d.pose ? { engaged: !d.paused } : {}),
+  }
   return { type: 'cursor', e }
 }
 

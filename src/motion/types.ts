@@ -23,6 +23,8 @@ export interface HandDetection {
   readonly world: Landmarks
   /** Уверенность handedness 0..1. */
   readonly score: number
+  /** Поза от обученного классификатора, если он загружен. Без неё работают правила по углам пальцев. */
+  readonly pose?: { readonly label: 'idle' | 'open' | 'fist' | 'point' | 'victory'; readonly confidence: number }
 }
 
 /** Кадр трекера: время в мс и найденные руки. */

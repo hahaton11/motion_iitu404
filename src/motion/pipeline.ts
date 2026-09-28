@@ -14,8 +14,8 @@ import {
   type HandState,
 } from './hand-state'
 import { initialHints, stepHints, type HintHandInput, type HintState } from './hints'
-import { frameToScreen } from './landmarks'
 import { oneEuro2DStep, oneEuro2DValue, type OneEuro2DState } from './one-euro'
+import { DEFAULT_POINTER, boxToScreen, initialPointer, stepPointer, type PointerBox, type PointerState } from './pointer'
 import { initialTwoHands, stepTwoHands, type HandSnapshot, type TwoHandsState } from './two-hands'
 import type { HandDetection, Thresholds, TrackerFrame, Vec2 } from './types'
 
@@ -28,7 +28,10 @@ export type OutEvent = { [K in InputEventType]: { readonly type: K; readonly e: 
 
 interface HandTrack {
   readonly machine: HandState
+  /** Сглаженные координаты для машины состояний: без заморозки и поводка, чтобы скорость броска была честной. */
   readonly filter: OneEuro2DState | undefined
+  /** Курсор, который видит пользователь. */
+  readonly pointer: PointerState
   /** Что знает потребитель: держит ли рука элемент по отправленным событиям. */
   readonly emittedHolding: boolean
 }
@@ -38,6 +41,7 @@ export interface PipelineState {
   readonly zoom: TwoHandsState
   readonly hints: HintState
   readonly thresholds: Thresholds
+  readonly box: PointerBox
 }
 
 /** Отладочные данные руки для демо. */
@@ -57,16 +61,27 @@ export interface FrameResult {
 
 const HAND_IDS: readonly HandId[] = ['left', 'right']
 
-const emptyTrack = (): HandTrack => ({ machine: initialHandState(), filter: undefined, emittedHolding: false })
+const emptyTrack = (): HandTrack => ({
+  machine: initialHandState(),
+  filter: undefined,
+  pointer: initialPointer(),
+  emittedHolding: false,
+})
 
-export const initialPipeline = (thresholds: Thresholds = DEFAULT_THRESHOLDS): PipelineState => ({
+export const initialPipeline = (
+  thresholds: Thresholds = DEFAULT_THRESHOLDS,
+  box: PointerBox = DEFAULT_POINTER.box,
+): PipelineState => ({
   hands: { left: emptyTrack(), right: emptyTrack() },
   zoom: initialTwoHands(),
   hints: initialHints(),
   thresholds,
+  box,
 })
 
 export const withThresholds = (s: PipelineState, thresholds: Thresholds): PipelineState => ({ ...s, thresholds })
+
+export const withPointerBox = (s: PipelineState, box: PointerBox): PipelineState => ({ ...s, box })
 
 interface HandStep {
   readonly track: HandTrack
@@ -75,14 +90,24 @@ interface HandStep {
   readonly lostFast: boolean
 }
 
-function stepSeen(track: HandTrack, det: HandDetection, t: number, th: Thresholds): HandStep {
+/** События машины получают координаты видимого курсора, чтобы элемент падал там, где его видно. */
+const atCursor = (e: HandEvent, p: Vec2): HandEvent => (e.type === 'handlost' ? e : { ...e, x: p.x, y: p.y })
+
+function stepSeen(track: HandTrack, det: HandDetection, t: number, th: Thresholds, box: PointerBox): HandStep {
   const features = computeFeatures(det)
-  const filter = oneEuro2DStep(track.filter, frameToScreen(features.center), t)
-  const screen = oneEuro2DValue(filter)
-  const frame = { t, x: screen.x, y: screen.y, closure: features.closure, indexOnly: features.indexOnly }
+  const filter = oneEuro2DStep(track.filter, boxToScreen(features.center, box), t)
+  const motion = oneEuro2DValue(filter)
+  const frame = { t, x: motion.x, y: motion.y, closure: features.closure, indexOnly: features.indexOnly }
   const r = stepHand(track.machine, frame, th)
+  const ctx = {
+    holding: isHoldingPhase(track.machine.phase),
+    transitioning: features.closure > th.open && features.closure < th.hold,
+  }
+  const p = stepPointer(track.pointer, features.center, t, ctx, { ...DEFAULT_POINTER, box })
+  const screen = p.screen
   const debug: HandDebug = { hand: det.hand, detection: det, features, phase: r.state.phase, screen }
-  return { track: { ...track, machine: r.state, filter }, machineEvents: r.events, debug, lostFast: false }
+  const machineEvents = r.events.map((e) => atCursor(e, screen))
+  return { track: { ...track, machine: r.state, filter, pointer: p.state }, machineEvents, debug, lostFast: false }
 }
 
 function stepMissing(track: HandTrack, t: number): HandStep {
@@ -91,7 +116,7 @@ function stepMissing(track: HandTrack, t: number): HandStep {
   const lost = r.events.some((e) => e.type === 'handlost')
   if (!lost) return { track: { ...track, machine: r.state }, machineEvents: [], debug: undefined, lostFast: false }
   // Release решается по тому, что знает потребитель: во время zoom машина могла отпустить молча.
-  const { x, y } = track.machine
+  const { x, y } = track.pointer.out ?? track.machine
   const release: HandEvent[] = track.emittedHolding ? [{ type: 'release', x, y, vx: 0, vy: 0 }] : []
   const events: HandEvent[] = [...release, { type: 'handlost' }]
   return { track: emptyTrack(), machineEvents: events, debug: undefined, lostFast: speed > LOST_FAST_SPEED }
@@ -128,7 +153,7 @@ function emitHand(hand: HandId, step: HandStep, suppress: boolean): { track: Han
 function reconcile(hand: HandId, track: HandTrack): { track: HandTrack; out: OutEvent[] } {
   const holding = isHoldingPhase(track.machine.phase)
   if (!isPresent(track.machine) || holding === track.emittedHolding) return { track, out: [] }
-  const { x, y } = track.machine
+  const { x, y } = track.pointer.out ?? track.machine
   const out: OutEvent = holding
     ? { type: 'grab', e: { hand, x, y } }
     : { type: 'release', e: { hand, x, y, vx: 0, vy: 0 } }
@@ -158,7 +183,7 @@ export function processFrame(s: PipelineState, frame: TrackerFrame): FrameResult
   const { t } = frame
   const steps = HAND_IDS.map((hand) => {
     const det = frame.hands.find((h) => h.hand === hand)
-    return det ? stepSeen(s.hands[hand], det, t, s.thresholds) : stepMissing(s.hands[hand], t)
+    return det ? stepSeen(s.hands[hand], det, t, s.thresholds, s.box) : stepMissing(s.hands[hand], t)
   }) as [HandStep, HandStep]
   const tz = stepTwoHands(s.zoom, { t, left: snapshot(steps[0]), right: snapshot(steps[1]) })
   const emitted = HAND_IDS.map((hand, i) => emitHand(hand, steps[i]!, tz.suppress))
@@ -174,5 +199,5 @@ export function processFrame(s: PipelineState, frame: TrackerFrame): FrameResult
     ...(tz.zoom ? [{ type: 'zoom', e: tz.zoom } as const] : []),
     ...hints.hints.map((e) => ({ type: 'hint', e }) as const),
   ]
-  return { state: { hands: tracks, zoom: tz.state, hints: hints.state, thresholds: s.thresholds }, events, debug }
+  return { state: { ...s, hands: tracks, zoom: tz.state, hints: hints.state }, events, debug }
 }

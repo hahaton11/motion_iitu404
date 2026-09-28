@@ -26,8 +26,25 @@ export const FINGER_CURLED_MIN = 0.5
 export const FRAME_ASPECT = 16 / 9
 
 // Экран и курсор.
-/** Мёртвая зона по краям кадра, растягивается на весь экран. */
+/** Мёртвая зона по краям кадра, растягивается на весь экран. Используется для геометрии, не для курсора. */
 export const EDGE_DEAD_ZONE = 0.08
+
+/**
+ * Рабочая зона курсора в кадре: центр и размер в долях кадра.
+ * Вся зона растягивается на экран, поэтому до углов экрана хватает движения кистью от локтя.
+ */
+export const POINTER_BOX = { cx: 0.5, cy: 0.5, w: 0.5, h: 0.5 } as const
+/** One Euro для свободной руки: быстрый отклик. */
+export const POINTER_FREE_FILTER = { minCutoff: 1.0, beta: 4, dCutoff: 1 } as const
+/** One Euro при удержании элемента: сильнее гасит дрожь, элемент не дёргается. */
+export const POINTER_HOLD_FILTER = { minCutoff: 0.35, beta: 2, dCutoff: 1 } as const
+/** Поводок: курсор сдвигается, только когда рука ушла дальше радиуса. Доли экрана. */
+export const POINTER_LEASH_FREE = 0.003
+export const POINTER_LEASH_HOLD = 0.008
+/** Максимум заморозки курсора, пока кулак сжимается или разжимается. */
+export const POINTER_FREEZE_MAX_MS = 250
+/** Насколько быстро гасится смещение после заморозки: доля смещения на единицу пути руки. */
+export const POINTER_OFFSET_BLEED = 4
 
 // One Euro filter для курсора. Единицы: доли экрана и герцы.
 export const ONE_EURO_MIN_CUTOFF = 0.8

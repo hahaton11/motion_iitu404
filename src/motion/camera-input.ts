@@ -14,6 +14,7 @@ import { closeCamera, openCamera } from './camera'
 import { DEFAULT_THRESHOLDS } from './hand-state'
 import { GestureClassifier } from '../gestures/model'
 import { GESTURE_MODEL_PATH } from './constants'
+import { LoadMeter, type LoadProgress } from './loading'
 import { assignHandIds, type RawHand } from './landmarks'
 import {
   initialPipeline,
@@ -38,6 +39,8 @@ export interface CameraInputOptions extends TrackerOptions {
   readonly thresholds?: Thresholds
   /** Рабочая зона курсора после прошлой калибровки. */
   readonly pointerBox?: PointerBox
+  /** Доля загруженного до первого кадра: около 22 МБ моделей и wasm. */
+  readonly onLoadProgress?: (p: LoadProgress) => void
 }
 
 export interface FrameInfo {
@@ -91,13 +94,17 @@ export class CameraInput implements InputSource {
   /** Включает камеру и модель. Бросает CameraError или TrackerLoadError с текстом для пользователя. */
   async start(): Promise<void> {
     if (this.stopLoop) return
-    const model = GestureClassifier.load(GESTURE_MODEL_PATH).catch(() => undefined)
-    const [stream, tracker, classifier] = await Promise.all([openCamera(this.videoEl), HandTracker.create(this.opts), model]).catch(
-      (err: unknown) => {
-        this.stop()
-        throw err
-      },
-    )
+    // Один счётчик на все три файла: они качаются параллельно, а доля наверх уходит одна.
+    const meter = new LoadMeter(this.opts.onLoadProgress)
+    const model = GestureClassifier.load(GESTURE_MODEL_PATH, (url) => meter.fetch('gestures', url)).catch(() => undefined)
+    const [stream, tracker, classifier] = await Promise.all([
+      openCamera(this.videoEl),
+      HandTracker.create({ ...this.opts, meter }),
+      model,
+    ]).catch((err: unknown) => {
+      this.stop()
+      throw err
+    })
     this.mediaStream = stream
     this.tracker = tracker
     this.classifier = classifier

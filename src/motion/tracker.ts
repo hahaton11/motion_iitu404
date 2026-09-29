@@ -8,6 +8,7 @@ import {
   WASM_PATH,
 } from './constants'
 import type { RawHand } from './landmarks'
+import type { LoadMeter } from './loading'
 
 /** HandLandmarker в режиме VIDEO: модель и wasm из public/, GPU с откатом на CPU. */
 
@@ -18,6 +19,8 @@ export interface TrackerOptions {
   readonly modelPath?: string
   /** Папка с wasm относительно страницы. */
   readonly wasmPath?: string
+  /** Счётчик загрузки: считает байты модели кисти и прогревает кэш wasm. */
+  readonly meter?: LoadMeter
 }
 
 export class TrackerLoadError extends Error {
@@ -29,16 +32,33 @@ export class TrackerLoadError extends Error {
 
 const resolveUrl = (path: string): string => new URL(path, document.baseURI).href
 
-async function createLandmarker(wasmUrl: string, modelUrl: string, delegate: Delegate): Promise<HandLandmarker> {
-  const fileset = await FilesetResolver.forVisionTasks(wasmUrl)
+type Fileset = Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>>
+type ModelSource = { readonly modelAssetBuffer: Uint8Array } | { readonly modelAssetPath: string }
+
+async function createLandmarker(fileset: Fileset, source: ModelSource, delegate: Delegate): Promise<HandLandmarker> {
   return HandLandmarker.createFromOptions(fileset, {
-    baseOptions: { modelAssetPath: modelUrl, delegate },
+    baseOptions: { ...source, delegate },
     runningMode: 'VIDEO',
     numHands: NUM_HANDS,
     minHandDetectionConfidence: MIN_DETECTION_CONFIDENCE,
     minHandPresenceConfidence: MIN_PRESENCE_CONFIDENCE,
     minTrackingConfidence: MIN_TRACKING_CONFIDENCE,
   })
+}
+
+/**
+ * Модель кисти скачивается своим кодом ради счётчика и отдаётся буфером, wasm только прогревает
+ * кэш браузера: его адрес выбирает сам MediaPipe и загружает его сам. Оба файла статические
+ * и приходят с ETag, поэтому вторая загрузка достаётся из кэша. Сбой здесь не фатален —
+ * без буфера MediaPipe возьмёт модель по адресу, просто счётчик недосчитает байты.
+ */
+async function prefetch(fileset: Fileset, modelUrl: string, meter: LoadMeter | undefined): Promise<Uint8Array | undefined> {
+  if (!meter) return undefined
+  const [model] = await Promise.all([
+    meter.fetch('model', modelUrl).catch(() => undefined),
+    meter.warm('wasm', fileset.wasmBinaryPath).catch(() => undefined),
+  ])
+  return model
 }
 
 /** Перевод результата MediaPipe в сырые руки. */
@@ -66,13 +86,17 @@ export class HandTracker {
     const wasmUrl = resolveUrl(opts.wasmPath ?? WASM_PATH)
     const modelUrl = resolveUrl(opts.modelPath ?? MODEL_PATH)
     try {
-      return new HandTracker(await createLandmarker(wasmUrl, modelUrl, 'GPU'), 'GPU')
-    } catch {
+      const fileset = await FilesetResolver.forVisionTasks(wasmUrl)
+      const model = await prefetch(fileset, modelUrl, opts.meter)
+      // Буфер отдаётся свежей копией: откат на CPU создаёт распознаватель второй раз.
+      const source = (): ModelSource => (model ? { modelAssetBuffer: new Uint8Array(model) } : { modelAssetPath: modelUrl })
       try {
-        return new HandTracker(await createLandmarker(wasmUrl, modelUrl, 'CPU'), 'CPU')
-      } catch (err) {
-        throw new TrackerLoadError(err)
+        return new HandTracker(await createLandmarker(fileset, source(), 'GPU'), 'GPU')
+      } catch {
+        return new HandTracker(await createLandmarker(fileset, source(), 'CPU'), 'CPU')
       }
+    } catch (err) {
+      throw new TrackerLoadError(err)
     }
   }
 

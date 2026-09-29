@@ -1,7 +1,7 @@
 import { CameraInput } from '../motion'
 import { drawHands, syncCanvas } from '../motion/demo-draw'
 import type { RawHand } from '../motion/landmarks'
-import { STEPS, advance, start, totalMs, type Dataset, type GestureLabel, type Phase, type Sample } from './protocol'
+import { ROUNDS, STEPS, advance, start, totalMs, type Dataset, type GestureLabel, type Phase, type Sample } from './protocol'
 import './record.css'
 
 /** Страница записи датасета: показывает жест, записывает кадры руки, отдаёт JSON для обучения. */
@@ -31,10 +31,12 @@ card.append(phaseEl, titleEl, instrEl, bar)
 const startBtn = el('button', 'rec-btn', 'Включаю камеру…')
 const saveBtn = el('button', 'rec-btn', 'Скачать датасет')
 saveBtn.disabled = true
+/** Запись идёт около четырёх минут. Терять её из-за сбоя на последней секунде нельзя. */
+const saveNote = el('p', 'rec-note', 'Скачать можно в любой момент — записанное до этой секунды не пропадёт')
 const counts = el('div', 'rec-counts')
 const side = el('div', 'rec-side')
 const controls = el('div', 'rec-card')
-controls.append(startBtn, el('div', '', ' '), saveBtn)
+controls.append(startBtn, el('div', '', ' '), saveBtn, saveNote)
 const countsCard = el('div', 'rec-card')
 countsCard.append(counts)
 side.append(card, controls, countsCard)
@@ -45,11 +47,19 @@ root.append(layout)
 const input = new CameraInput({ video })
 const samples: Sample[] = []
 let phase: Phase = { kind: 'idle' }
+let saved = false
+
+let countedAt = -1
 
 function renderCounts(): void {
+  if (samples.length === countedAt) return
+  countedAt = samples.length
   const by = new Map<string, number>()
   samples.forEach((s) => by.set(`${s.label} r${s.round + 1}`, (by.get(`${s.label} r${s.round + 1}`) ?? 0) + 1))
   counts.textContent = [...by.entries()].map(([k, v]) => `${k.padEnd(14)} ${v}`).join('\n') || 'кадров пока нет'
+  // Кнопка открывается сразу, как появились кадры: неполная запись лучше потерянной.
+  saveBtn.disabled = samples.length === 0
+  saveBtn.textContent = phase.kind === 'done' ? 'Скачать датасет' : `Скачать что записано (${samples.length} кадров)`
 }
 
 function renderPhase(t: number): void {
@@ -60,7 +70,7 @@ function renderPhase(t: number): void {
     instrEl.textContent = 'Нажми «Скачать датасет» и напиши в чат, что файл скачан'
     overlay.textContent = 'Готово'
     fill.style.width = '100%'
-    saveBtn.disabled = false
+    renderCounts()
     return
   }
   const step = STEPS[phase.step]
@@ -68,7 +78,9 @@ function renderPhase(t: number): void {
   const recording = phase.kind === 'record'
   const dur = recording ? step.recordMs : 3000
   const left = Math.max(0, Math.ceil((dur - (t - phase.since)) / 1000))
-  phaseEl.textContent = `Круг ${phase.round + 1} · ${recording ? 'запись' : 'приготовься'} · ${left} с`
+  // Круг и номер жеста видны всё время: иначе на переходе к кругу 2 кажется, что запись началась заново.
+  const where = `Круг ${phase.round + 1} из ${ROUNDS} · жест ${phase.step + 1} из ${STEPS.length}`
+  phaseEl.textContent = `${where} · ${recording ? 'запись' : 'приготовься'} · ${left} с`
   phaseEl.classList.toggle('is-record', recording)
   titleEl.textContent = step.title
   instrEl.textContent = step.instruction
@@ -92,7 +104,7 @@ input.onFrame((info) => {
     if (step) capture(info.t, info.raw, step.label, phase.round)
   }
   renderPhase(now)
-  if (samples.length % 30 === 0) renderCounts()
+  if (samples.length - countedAt >= 30) renderCounts()
 })
 
 let cameraReady = false
@@ -130,7 +142,18 @@ saveBtn.addEventListener('click', () => {
   const url = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }))
   const a = Object.assign(document.createElement('a'), { href: url, download: `gestures-${Date.now()}.json` })
   a.click()
+  saved = true
+  saveNote.textContent = `Скачано ${samples.length} кадров. Файл в Загрузках, имя начинается с gestures-`
   setTimeout(() => URL.revokeObjectURL(url), 1000)
+})
+
+/**
+ * Записанное живёт только в памяти вкладки: перезагрузка стирает четыре минуты работы молча.
+ * Пока запись не скачана, уход со страницы требует подтверждения.
+ */
+window.addEventListener('beforeunload', (e) => {
+  if (samples.length === 0 || saved) return
+  e.preventDefault()
 })
 
 renderCounts()

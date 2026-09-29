@@ -128,7 +128,10 @@ export class App {
 
   private startCamera(): void {
     if (this.cam && this.camStatus.phase !== 'failed') return
-    const cam = new CameraInput({ video: this.video })
+    const cam = new CameraInput({
+      video: this.video,
+      onLoadProgress: (progress) => this.cam === cam && this.camStatus.phase === 'loading' && this.setCamStatus({ phase: 'loading', progress }),
+    })
     this.cam = cam
     this.hub.use(cam)
     this.setCamStatus({ phase: 'loading' })

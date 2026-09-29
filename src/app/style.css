@@ -436,6 +436,47 @@ body[data-mode='mouse'] .app-screen.is-calibration {
   transform-origin: 0 50%;
 }
 
+/* Загрузка распознавания: 22 МБ до первого кадра */
+.app-load {
+  width: min(420px, 100%);
+  margin: 12px auto 0;
+}
+
+.app-load .app-bar {
+  margin: 0;
+}
+
+.app-load .app-bar-fill {
+  transition: transform 200ms linear;
+}
+
+.app-load-label {
+  margin: 6px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Байты кончились, а wasm ещё разворачивается: время уже не измерить, но работа идёт. */
+.app-load .app-bar.is-waiting .app-bar-fill {
+  animation: app-load-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes app-load-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-load .app-bar-fill {
+    transition: none;
+    animation: none !important;
+  }
+}
+
 /* Досочные экраны: карточки сверху по центру, угол слева под мини-камерой */
 .app-screen.is-hud > .app-card {
   position: absolute;

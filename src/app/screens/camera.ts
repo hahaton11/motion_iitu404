@@ -1,6 +1,7 @@
 import type { MotionHintCode } from '../../contracts/input'
 import type { AppContext, ScreenHandle } from '../context'
 import { el, icon, isolate, text } from '../dom'
+import { loadBar } from '../load-bar'
 
 /** Камера: доступ, индикатор «Вижу руку», подсказки о расстоянии и свете, выход в режим мыши. */
 
@@ -38,7 +39,8 @@ export function mountCamera(ctx: AppContext): ScreenHandle {
       ctx.send({ type: 'useMouse' })
     },
   })
-  const card = el('div', 'app-card app-camera', title, status, seen, tip, el('div', 'app-row', next, mouse))
+  const load = loadBar()
+  const card = el('div', 'app-card app-camera', title, load.node, status, seen, tip, el('div', 'app-row', next, mouse))
   const screen = el('section', 'app-screen is-full is-camera', isolate(card))
   ctx.layer.append(screen)
 
@@ -46,6 +48,7 @@ export function mountCamera(ctx: AppContext): ScreenHandle {
     const cam = ctx.cameraStatus()
     const visible = cam.phase === 'ready' && performance.now() - lastSeen < SEEN_MS
     title.textContent = PHASE_TITLE[cam.phase]
+    load.update(cam.phase === 'loading' ? cam.progress : undefined)
     const waiting = cam.phase === 'loading' && performance.now() - mountedAt > PROMPT_HINT_MS
     status.textContent = cam.phase === 'failed' ? (cam.message ?? '') : waiting ? PROMPT_HINT : ''
     seen.classList.toggle('is-on', visible)

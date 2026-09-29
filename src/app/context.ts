@@ -1,5 +1,5 @@
 import type { BoardState } from '../board'
-import type { CameraInput } from '../motion'
+import type { CameraInput, LoadProgress } from '../motion'
 import type { Evaluation } from './challenge'
 import type { ExportZone } from './export'
 import type { FlowEvent, FlowState } from './flow'
@@ -17,6 +17,8 @@ export interface CameraStatus {
   readonly phase: CameraPhase
   /** Что сделать, если камера не включилась. */
   readonly message?: string
+  /** Сколько моделей и wasm уже скачано. Есть только в фазе загрузки. */
+  readonly progress?: LoadProgress
 }
 
 export interface ChallengeResult {

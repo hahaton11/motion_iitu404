@@ -59,7 +59,8 @@ function renderCounts(): void {
   counts.textContent = [...by.entries()].map(([k, v]) => `${k.padEnd(14)} ${v}`).join('\n') || 'кадров пока нет'
   // Кнопка открывается сразу, как появились кадры: неполная запись лучше потерянной.
   saveBtn.disabled = samples.length === 0
-  saveBtn.textContent = phase.kind === 'done' ? 'Скачать датасет' : `Скачать что записано (${samples.length} кадров)`
+  const partial = samples.length > 0 && phase.kind !== 'done'
+  saveBtn.textContent = partial ? `Скачать что записано (${samples.length} кадров)` : 'Скачать датасет'
 }
 
 function renderPhase(t: number): void {

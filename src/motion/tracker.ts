@@ -8,7 +8,7 @@ import {
   WASM_PATH,
 } from './constants'
 import type { RawHand } from './landmarks'
-import type { LoadMeter } from './loading'
+import type { Bytes, LoadMeter } from './loading'
 
 /** HandLandmarker в режиме VIDEO: модель и wasm из public/, GPU с откатом на CPU. */
 
@@ -32,6 +32,9 @@ export class TrackerLoadError extends Error {
 
 const resolveUrl = (path: string): string => new URL(path, document.baseURI).href
 
+/** Тип обязателен: без него instantiateStreaming не берёт blob и откатывается на медленный путь. */
+const WASM_MIME = 'application/wasm'
+
 type Fileset = Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>>
 type ModelSource = { readonly modelAssetBuffer: Uint8Array } | { readonly modelAssetPath: string }
 
@@ -46,19 +49,29 @@ async function createLandmarker(fileset: Fileset, source: ModelSource, delegate:
   })
 }
 
+interface Prepared {
+  /** Набор файлов MediaPipe: wasm подменён на уже скачанные байты. */
+  readonly fileset: Fileset
+  readonly model: Bytes | undefined
+  readonly release: () => void
+}
+
 /**
- * Модель кисти скачивается своим кодом ради счётчика и отдаётся буфером, wasm только прогревает
- * кэш браузера: его адрес выбирает сам MediaPipe и загружает его сам. Оба файла статические
- * и приходят с ETag, поэтому вторая загрузка достаётся из кэша. Сбой здесь не фатален —
- * без буфера MediaPipe возьмёт модель по адресу, просто счётчик недосчитает байты.
+ * Оба больших файла скачиваются своим кодом — иначе их байты не посчитать, а до первого кадра
+ * их около 20 МБ. Модель кисти уходит дальше буфером. Для wasm буфера в API нет, поэтому
+ * MediaPipe получает адрес blob'а: полагаться на кэш браузера нельзя, Chrome на чистом профиле
+ * держит кэш в памяти и файл такого размера в него не кладёт — получалась двойная загрузка.
+ * Сбой любого из двух не фатален: MediaPipe возьмёт файл по обычному адресу сам.
  */
-async function prefetch(fileset: Fileset, modelUrl: string, meter: LoadMeter | undefined): Promise<Uint8Array | undefined> {
-  if (!meter) return undefined
-  const [model] = await Promise.all([
+async function prepare(fileset: Fileset, modelUrl: string, meter: LoadMeter | undefined): Promise<Prepared> {
+  if (!meter) return { fileset, model: undefined, release: () => undefined }
+  const [model, wasm] = await Promise.all([
     meter.fetch('model', modelUrl).catch(() => undefined),
-    meter.warm('wasm', fileset.wasmBinaryPath).catch(() => undefined),
+    meter.fetch('wasm', fileset.wasmBinaryPath).catch(() => undefined),
   ])
-  return model
+  if (!wasm) return { fileset, model, release: () => undefined }
+  const url = URL.createObjectURL(new Blob([wasm], { type: WASM_MIME }))
+  return { fileset: { ...fileset, wasmBinaryPath: url }, model, release: () => URL.revokeObjectURL(url) }
 }
 
 /** Перевод результата MediaPipe в сырые руки. */
@@ -85,18 +98,23 @@ export class HandTracker {
   static async create(opts: TrackerOptions = {}): Promise<HandTracker> {
     const wasmUrl = resolveUrl(opts.wasmPath ?? WASM_PATH)
     const modelUrl = resolveUrl(opts.modelPath ?? MODEL_PATH)
+    let release = (): void => undefined
     try {
-      const fileset = await FilesetResolver.forVisionTasks(wasmUrl)
-      const model = await prefetch(fileset, modelUrl, opts.meter)
+      const resolved = await FilesetResolver.forVisionTasks(wasmUrl)
+      const ready = await prepare(resolved, modelUrl, opts.meter)
+      release = ready.release
       // Буфер отдаётся свежей копией: откат на CPU создаёт распознаватель второй раз.
-      const source = (): ModelSource => (model ? { modelAssetBuffer: new Uint8Array(model) } : { modelAssetPath: modelUrl })
+      const source = (): ModelSource =>
+        ready.model ? { modelAssetBuffer: new Uint8Array(ready.model) } : { modelAssetPath: modelUrl }
       try {
-        return new HandTracker(await createLandmarker(fileset, source(), 'GPU'), 'GPU')
+        return new HandTracker(await createLandmarker(ready.fileset, source(), 'GPU'), 'GPU')
       } catch {
-        return new HandTracker(await createLandmarker(fileset, source(), 'CPU'), 'CPU')
+        return new HandTracker(await createLandmarker(ready.fileset, source(), 'CPU'), 'CPU')
       }
     } catch (err) {
       throw new TrackerLoadError(err)
+    } finally {
+      release()
     }
   }
 

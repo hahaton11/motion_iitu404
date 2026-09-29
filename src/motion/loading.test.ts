@@ -13,14 +13,16 @@ import {
 const TOTAL = ASSET_BYTES.wasm + ASSET_BYTES.model + ASSET_BYTES.gestures
 
 /** Ответ с телом-потоком: куски приходят по одному, как от сети. */
-function streamed(chunks: readonly Uint8Array[], contentLength: number | undefined): Response {
+function streamed(chunks: readonly Uint8Array[], contentLength: number | undefined, encoding?: string): Response {
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
       chunks.forEach((c) => controller.enqueue(c))
       controller.close()
     },
   })
-  const headers = new Headers(contentLength === undefined ? {} : { 'content-length': String(contentLength) })
+  const headers = new Headers()
+  if (contentLength !== undefined) headers.set('content-length', String(contentLength))
+  if (encoding) headers.set('content-encoding', encoding)
   return new Response(body, { status: 200, headers })
 }
 
@@ -78,12 +80,19 @@ describe('fetchCounting', () => {
     expect(Array.from(bytes)).toEqual([1, 2, 3])
   })
 
-  it('counts without keeping the body when the bytes are not needed', async () => {
+  it('passes the declared size along with every report', async () => {
     stubFetch(() => streamed([new Uint8Array(64), new Uint8Array(64)], 128))
     const seen: (number | undefined)[] = []
-    const bytes = await fetchCounting('u', (_loaded, total) => seen.push(total), false)
-    expect(bytes.length).toBe(0)
+    const bytes = await fetchCounting('u', (_loaded, total) => seen.push(total))
+    expect(bytes.length).toBe(128)
     expect(seen).toEqual([128, 128])
+  })
+
+  it('ignores the size of a compressed response: we read the unpacked stream', async () => {
+    stubFetch(() => streamed([new Uint8Array(2048)], 600, 'gzip'))
+    const seen: (number | undefined)[] = []
+    await fetchCounting('u', (_loaded, total) => seen.push(total))
+    expect(seen).toEqual([undefined])
   })
 
   it('throws on a failed response', async () => {
@@ -106,14 +115,14 @@ describe('LoadMeter', () => {
   it('closes the asset even when it fails, so the bar cannot stall', async () => {
     stubFetch(new Response('', { status: 500 }))
     const meter = new LoadMeter()
-    await expect(meter.warm('wasm', 'mediapipe/wasm/x.wasm')).rejects.toThrow('500')
+    await expect(meter.fetch('wasm', 'mediapipe/wasm/x.wasm')).rejects.toThrow('500')
     expect(meter.progress.ratio).toBeCloseTo(ASSET_BYTES.wasm / TOTAL)
   })
 
   it('is done only after every asset is closed', async () => {
     stubFetch(() => streamed([new Uint8Array(8)], 8))
     const meter = new LoadMeter()
-    await Promise.all([meter.warm('wasm', 'a'), meter.fetch('model', 'b'), meter.fetch('gestures', 'c')])
+    await Promise.all([meter.fetch('wasm', 'a'), meter.fetch('model', 'b'), meter.fetch('gestures', 'c')])
     expect(meter.progress.done).toBe(true)
     expect(meter.progress.ratio).toBe(1)
   })

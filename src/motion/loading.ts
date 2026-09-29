@@ -75,9 +75,10 @@ export const formatMb = (bytes: number): string => (bytes / 1_000_000).toFixed(1
 
 type OnBytes = (loaded: number, total: number | undefined) => void
 
-const EMPTY = new Uint8Array(0)
+/** Байты всегда в своём ArrayBuffer: их отдают наружу в Blob и в буфер модели. */
+export type Bytes = Uint8Array<ArrayBuffer>
 
-function join(chunks: readonly Uint8Array[], size: number): Uint8Array {
+function join(chunks: readonly Uint8Array[], size: number): Bytes {
   const out = new Uint8Array(size)
   let at = 0
   chunks.forEach((chunk) => {
@@ -91,32 +92,42 @@ async function readStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   onBytes: OnBytes,
   total: number | undefined,
-  keep: boolean,
-): Promise<Uint8Array> {
+): Promise<Bytes> {
   const chunks: Uint8Array[] = []
   let loaded = 0
   for (;;) {
     const chunk = await reader.read()
     if (chunk.done) break
     loaded += chunk.value.length
-    if (keep) chunks.push(chunk.value)
+    chunks.push(chunk.value)
     onBytes(loaded, total)
   }
-  return keep ? join(chunks, loaded) : EMPTY
+  return join(chunks, loaded)
 }
 
-/** Загрузка с подсчётом байтов. При `keep = false` куски выбрасываются: нужен только кэш и счёт. */
-export async function fetchCounting(url: string, onBytes: OnBytes, keep = true): Promise<Uint8Array> {
+/**
+ * Размер из заголовков, если ему можно верить. У сжатого ответа Content-Length — длина
+ * сжатого потока, а читаем мы распакованный: цифра занизит размер вдвое и подпись поедет.
+ * В этом случае лучше оценка из ASSET_BYTES, снятая с файлов в public/.
+ */
+function declaredSize(res: Response): number | undefined {
+  const encoding = res.headers.get('content-encoding')
+  if (encoding && encoding !== 'identity') return undefined
+  const header = res.headers.get('content-length')
+  return header ? Number(header) : undefined
+}
+
+/** Загрузка с подсчётом байтов по мере их прихода. */
+export async function fetchCounting(url: string, onBytes: OnBytes): Promise<Bytes> {
   const res = await fetch(url)
   if (!res.ok) throw new Error(`${url}: ${res.status}`)
-  const header = res.headers.get('content-length')
-  const total = header ? Number(header) : undefined
+  const total = declaredSize(res)
   if (!res.body) {
     const whole = new Uint8Array(await res.arrayBuffer())
     onBytes(whole.length, whole.length)
-    return keep ? whole : EMPTY
+    return whole
   }
-  return readStream(res.body.getReader(), onBytes, total, keep)
+  return readStream(res.body.getReader(), onBytes, total)
 }
 
 /** Общий счётчик на одну загрузку приложения: файлы качаются параллельно, доля одна. */
@@ -130,19 +141,10 @@ export class LoadMeter {
     return summarize(this.assets)
   }
 
-  /** Скачать файл и отдать байты. */
-  fetch(key: AssetKey, url: string): Promise<Uint8Array> {
-    return this.run(key, url, true)
-  }
-
-  /** Скачать ради кэша браузера и счётчика: сами байты возьмёт MediaPipe. */
-  async warm(key: AssetKey, url: string): Promise<void> {
-    await this.run(key, url, false)
-  }
-
-  private async run(key: AssetKey, url: string, keep: boolean): Promise<Uint8Array> {
+  /** Скачать файл, считая байты в общую долю. */
+  async fetch(key: AssetKey, url: string): Promise<Bytes> {
     try {
-      return await fetchCounting(url, (loaded, total) => this.step(key, loaded, total), keep)
+      return await fetchCounting(url, (loaded, total) => this.step(key, loaded, total))
     } finally {
       this.assets = finishAsset(this.assets, key)
       this.notify(true)

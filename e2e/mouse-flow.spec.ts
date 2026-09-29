@@ -34,7 +34,7 @@ async function passTutorial(page: Page): Promise<void> {
 
   await expect(practice('Выброси меня')).toBeVisible()
   await page.waitForTimeout(SPAWN_MS)
-  await fling(page, await centerOf(practice('Выброси меня')), -420)
+  await fling(page, await centerOf(practice('Выброси меня')))
   await expect(progress).toHaveText('Шаг 3 из 4')
 
   const taken = await takeFromPocket(page)
@@ -55,7 +55,7 @@ async function sortIdeas(page: Page): Promise<void> {
     const from = await centerOf(sticker)
     const slot = used[idea.target] ?? 0
     used[idea.target] = slot + 1
-    if (idea.target === 'trash' && slot === 0) await fling(page, from, 360)
+    if (idea.target === 'trash' && slot === 0) await fling(page, from)
     else await drag(page, from, await slotIn(page, idea.target, slot))
     if (idea.target === 'trash') await expect(sticker).toHaveCount(0)
   }

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { fling } from './gestures'
 
 /**
  * Смоук управления фокусом на MouseInput с ?nav=focus: стрелки — взмахи, кнопка мыши — кулак.
@@ -40,13 +41,7 @@ test('focus navigation: tutorial with swipes only', async ({ page }) => {
 
   await wait(SPAWN_MS)
   await nudge(page)
-  await page.mouse.down()
-  await wait(STEP_MS)
-  for (let i = 1; i <= 6; i++) {
-    await page.mouse.move(640 - i * 70, 400)
-    await wait(8)
-  }
-  await page.mouse.up()
+  await fling(page, { x: 640, y: 400 })
   await expect(progress).toHaveText('Шаг 3 из 4')
 
   await page.mouse.move(640, 400)

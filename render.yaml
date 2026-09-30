@@ -1,0 +1,18 @@
+# Render Blueprint: статический сайт из сборки Vite. HTTPS включён, камера в браузере работает.
+services:
+  - type: web
+    name: motion-board
+    runtime: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    pullRequestPreviewsEnabled: false
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+    headers:
+      - path: /models/*
+        name: Cache-Control
+        value: public, max-age=86400
+      - path: /mediapipe/*
+        name: Cache-Control
+        value: public, max-age=86400

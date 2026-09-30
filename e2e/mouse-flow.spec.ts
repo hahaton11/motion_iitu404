@@ -1,14 +1,24 @@
 import { expect, test, type Page } from '@playwright/test'
-import { IDEAS, ideaElementId, type IdeaTarget } from '../src/app/challenge'
+import { CLUSTERS, IDEAS, TRASH_TITLE, ideaElementId, type IdeaTarget } from '../src/app/challenge'
+import { TUTORIAL_STEPS } from '../src/app/tutorial'
 import { centerOf, drag, fling, glide, takeFromPocket, type Point } from './gestures'
 
 /** Смоук на MouseInput: старт → обучение из четырёх шагов → челлендж → финал. */
 
+/**
+ * Названия берутся из кода, а не выписываются здесь второй раз: выписанная копия расходится
+ * с продуктом при первой же правке текстов, и тест начинает падать по причине, к которой
+ * не имеет отношения.
+ */
 const ZONE_TITLE: Readonly<Record<IdeaTarget, string>> = {
-  menu: 'Меню',
-  promo: 'Продвижение',
-  space: 'Интерьер',
-  trash: 'Корзина',
+  ...Object.fromEntries(CLUSTERS.map((c) => [c.id, c.title])),
+  trash: TRASH_TITLE,
+} as Readonly<Record<IdeaTarget, string>>
+
+const spawnTextOf = (id: string): string => {
+  const step = TUTORIAL_STEPS.find((s) => s.id === id)
+  if (!step?.spawnText) throw new Error(`tutorial step ${id} has no spawnText`)
+  return step.spawnText
 }
 /** Раскладка внутри зоны по горизонтали, доли ширины от центра. */
 const SPREAD = [-0.3, 0, 0.3, -0.15] as const
@@ -29,12 +39,12 @@ async function passTutorial(page: Page): Promise<void> {
   const progress = page.locator('.app-tut-progress')
   const practice = (label: string) => page.locator('[data-id="tut-practice"]', { hasText: label })
   await expect(progress).toHaveText('Шаг 1 из 4')
-  await drag(page, await centerOf(practice('Перенеси меня')), await centerOf(page.locator('.app-zone')))
+  await drag(page, await centerOf(practice(spawnTextOf('move'))), await centerOf(page.locator('.app-zone')))
   await expect(progress).toHaveText('Шаг 2 из 4')
 
-  await expect(practice('Выброси меня')).toBeVisible()
+  await expect(practice(spawnTextOf('throw'))).toBeVisible()
   await page.waitForTimeout(SPAWN_MS)
-  await fling(page, await centerOf(practice('Выброси меня')))
+  await fling(page, await centerOf(practice(spawnTextOf('throw'))))
   await expect(progress).toHaveText('Шаг 3 из 4')
 
   const taken = await takeFromPocket(page)
@@ -73,7 +83,7 @@ test('mouse: start, tutorial, challenge, final', async ({ page }) => {
   await sortIdeas(page)
 
   const taken = await takeFromPocket(page)
-  await glide(page, taken, await slotIn(page, 'promo', 3))
+  await glide(page, taken, await slotIn(page, 'comms', 3))
   await page.mouse.up()
 
   const final = page.locator('.app-final')

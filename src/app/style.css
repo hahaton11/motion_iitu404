@@ -72,6 +72,38 @@ body {
   pointer-events: auto;
 }
 
+/*
+ * Уголки вместо сплошной рамки: карточка читается как окно пульта, а не как диалог браузера.
+ * Рисуются псевдоэлементами — разметка и раскладка не меняются, на FPS доски не влияет,
+ * потому что тени и размытия здесь нет.
+ */
+.app-card::before,
+.app-card::after {
+  content: '';
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--mb-accent);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.app-card::before {
+  top: -1px;
+  left: -1px;
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: 22px 0 0 0;
+}
+
+.app-card::after {
+  right: -1px;
+  bottom: -1px;
+  border-top: 0;
+  border-left: 0;
+  border-radius: 0 0 22px 0;
+}
+
 .app-row {
   display: flex;
   flex-wrap: wrap;
@@ -242,6 +274,15 @@ body {
   font-size: 18px;
   color: var(--mb-fg);
   opacity: 0.85;
+}
+
+/* Вторая строка старта: отвечает «где это нужно», поэтому тише основной. */
+.app-sub {
+  margin: 6px auto 0;
+  max-width: 480px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--mb-muted);
 }
 
 .app-switch {
@@ -621,12 +662,17 @@ body[data-mode='camera'][data-cam][data-screen='calibration'] .app-corner {
   background: color-mix(in srgb, var(--mb-danger) 6%, transparent);
 }
 
+/*
+ * Названия систем набраны как подписи на приборной панели: моноширинный, в разрядку, капсом.
+ * Это отличает служебную разметку экрана от содержимого, которое человек двигает руками.
+ */
 .app-zone-title {
   position: absolute;
   top: 12px;
   left: 18px;
-  font-size: 22px;
-  font-weight: 750;
+  font: 600 14px/1.2 ui-monospace, Menlo, Consolas, monospace;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
   color: var(--mb-accent);
 }
 

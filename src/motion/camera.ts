@@ -42,24 +42,35 @@ export function cameraErrorCode(err: unknown): CameraErrorCode {
   return BY_NAME[name] ?? 'unknown'
 }
 
-export const CAMERA_CONSTRAINTS: MediaStreamConstraints = {
-  audio: false,
-  video: {
-    width: { ideal: CAMERA_WIDTH },
-    height: { ideal: CAMERA_HEIGHT },
-    frameRate: { ideal: CAMERA_FPS },
-    facingMode: 'user',
-  },
+/** Запрашиваемый размер и частота съёмки. Размер кадра — главная статья расходов распознавания. */
+export interface CameraSize {
+  readonly width: number
+  readonly height: number
+  readonly fps: number
 }
 
+export const DEFAULT_CAMERA_SIZE: CameraSize = { width: CAMERA_WIDTH, height: CAMERA_HEIGHT, fps: CAMERA_FPS }
+
+export const cameraConstraints = (s: CameraSize = DEFAULT_CAMERA_SIZE): MediaStreamConstraints => ({
+  audio: false,
+  video: {
+    width: { ideal: s.width },
+    height: { ideal: s.height },
+    frameRate: { ideal: s.fps },
+    facingMode: 'user',
+  },
+})
+
+export const CAMERA_CONSTRAINTS: MediaStreamConstraints = cameraConstraints()
+
 /** Включает камеру и запускает видео. Бросает CameraError. */
-export async function openCamera(video: HTMLVideoElement): Promise<MediaStream> {
+export async function openCamera(video: HTMLVideoElement, size?: CameraSize): Promise<MediaStream> {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new CameraError(window.isSecureContext ? 'unsupported' : 'insecure')
   }
   let stream: MediaStream
   try {
-    stream = await navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS)
+    stream = await navigator.mediaDevices.getUserMedia(cameraConstraints(size))
   } catch (err) {
     throw new CameraError(cameraErrorCode(err), err)
   }

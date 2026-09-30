@@ -21,6 +21,10 @@ export interface TrackerOptions {
   readonly wasmPath?: string
   /** Счётчик загрузки: считает байты модели кисти и прогревает кэш wasm. */
   readonly meter?: LoadMeter
+  /** Принудительный делегат вместо «GPU с откатом на CPU». Для замеров производительности. */
+  readonly delegate?: Delegate
+  /** Сколько рук искать. Две нужны для зума, но каждая рука стоит времени на кадре. */
+  readonly numHands?: number
 }
 
 export class TrackerLoadError extends Error {
@@ -38,11 +42,16 @@ const WASM_MIME = 'application/wasm'
 type Fileset = Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>>
 type ModelSource = { readonly modelAssetBuffer: Uint8Array } | { readonly modelAssetPath: string }
 
-async function createLandmarker(fileset: Fileset, source: ModelSource, delegate: Delegate): Promise<HandLandmarker> {
+async function createLandmarker(
+  fileset: Fileset,
+  source: ModelSource,
+  delegate: Delegate,
+  numHands = NUM_HANDS,
+): Promise<HandLandmarker> {
   return HandLandmarker.createFromOptions(fileset, {
     baseOptions: { ...source, delegate },
     runningMode: 'VIDEO',
-    numHands: NUM_HANDS,
+    numHands,
     minHandDetectionConfidence: MIN_DETECTION_CONFIDENCE,
     minHandPresenceConfidence: MIN_PRESENCE_CONFIDENCE,
     minTrackingConfidence: MIN_TRACKING_CONFIDENCE,
@@ -106,10 +115,12 @@ export class HandTracker {
       // Буфер отдаётся свежей копией: откат на CPU создаёт распознаватель второй раз.
       const source = (): ModelSource =>
         ready.model ? { modelAssetBuffer: new Uint8Array(ready.model) } : { modelAssetPath: modelUrl }
+      const first = opts.delegate ?? 'GPU'
+      const fallback: Delegate = first === 'GPU' ? 'CPU' : 'GPU'
       try {
-        return new HandTracker(await createLandmarker(ready.fileset, source(), 'GPU'), 'GPU')
+        return new HandTracker(await createLandmarker(ready.fileset, source(), first, opts.numHands), first)
       } catch {
-        return new HandTracker(await createLandmarker(ready.fileset, source(), 'CPU'), 'CPU')
+        return new HandTracker(await createLandmarker(ready.fileset, source(), fallback, opts.numHands), fallback)
       }
     } catch (err) {
       throw new TrackerLoadError(err)

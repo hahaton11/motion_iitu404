@@ -10,7 +10,7 @@ import {
   type CalibrationState,
   type CalibrationStep,
 } from './calibration'
-import { closeCamera, openCamera } from './camera'
+import { closeCamera, openCamera, type CameraSize } from './camera'
 import { DEFAULT_THRESHOLDS } from './hand-state'
 import { GestureClassifier } from '../gestures/model'
 import { GESTURE_MODEL_PATH } from './constants'
@@ -41,6 +41,8 @@ export interface CameraInputOptions extends TrackerOptions {
   readonly pointerBox?: PointerBox
   /** Доля загруженного до первого кадра: около 22 МБ моделей и wasm. */
   readonly onLoadProgress?: (p: LoadProgress) => void
+  /** Запрашиваемый размер кадра. Размер — главная статья расходов распознавания. */
+  readonly cameraSize?: CameraSize
 }
 
 export interface FrameInfo {
@@ -98,7 +100,7 @@ export class CameraInput implements InputSource {
     const meter = new LoadMeter(this.opts.onLoadProgress)
     const model = GestureClassifier.load(GESTURE_MODEL_PATH, (url) => meter.fetch('gestures', url)).catch(() => undefined)
     const [stream, tracker, classifier] = await Promise.all([
-      openCamera(this.videoEl),
+      openCamera(this.videoEl, this.opts.cameraSize),
       HandTracker.create({ ...this.opts, meter }),
       model,
     ]).catch((err: unknown) => {

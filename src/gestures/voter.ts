@@ -13,6 +13,29 @@ import type { Pose, RawPose } from './model'
 export const VOTE_WINDOW = 6
 export const VOTE_NEED = 4
 export const VOTE_THRESHOLD = 0.75
+/**
+ * Сколько кадров нужно жесту, когда против него голосует только бездействие.
+ *
+ * Разобрано на записи живого броска (`scripts/diagnose-throw.ts`): классификатор уверенно
+ * называл раскрытую ладонь 68 раз за 21 секунду, но ни разу не набрал 4 кадра из 6 подряд.
+ * Последовательность на махе идёт вперемешку — `idle, idle, open, idle, open, open` — три
+ * против трёх, большинства нет ни у кого, поза остаётся кулаком, и элемент не отпускается.
+ * За всю запись с десятью бросками сработал один, и то по потере руки из кадра.
+ *
+ * Кадры `idle` при этом уверенные, 0.86 и выше: модель не сомневается, она обучена считать
+ * движущуюся руку, ничего не показывающую, отдельным классом `none`. Раскрывающаяся на махе
+ * ладонь попадает в него законно.
+ */
+export const GESTURE_NEED = 3
+/** Порог уверенности, пока рука летит. Подобран на записи живого броска, см. VoterParams. */
+export const VOTE_THRESHOLD_FAST = 0.65
+/**
+ * Скорость, выше которой кадр считается снятым в движении, доли экрана в секунду.
+ * Ниже THROW_SPEED: политика должна смягчаться раньше, чем движение станет броском,
+ * иначе смягчение опаздывает ровно на те кадры, ради которых вводится. Выше спокойной руки:
+ * на записи покоя медиана скорости 0.1–0.4.
+ */
+export const MOVING_SPEED = 0.8
 
 /**
  * - `idle` — голосует за бездействие. На быстром движении и на развёрнутой ладони уверенность
@@ -30,6 +53,23 @@ export interface VoterParams {
   readonly need: number
   readonly threshold: number
   readonly belowThreshold: BelowThreshold
+  /**
+   * Сколько голосов нужно жесту, чтобы стать позой, когда бездействие его не перебивает.
+   * Равный `need` возвращает прежнее поведение, где `idle` соперничал на общих основаниях.
+   */
+  readonly gestureNeed: number
+  /**
+   * Порог уверенности, пока рука движется быстро. Смаз на махе — ожидаемое условие съёмки,
+   * а не повод молчать: раскрытие ладони в броске длится 2–3 кадра, и кадр с уверенностью
+   * 0.71 выбрасывал серию целиком.
+   */
+  readonly thresholdFast: number
+  /**
+   * Что делает неуверенный кадр на быстром движении. Здесь `idle` недопустим: на махе
+   * неуверенных кадров большинство, они забивают `open`, поза застревает в бездействии
+   * с closure 0.6 между порогами, и элемент нельзя выпустить.
+   */
+  readonly belowThresholdFast: BelowThreshold
 }
 
 /**
@@ -69,7 +109,10 @@ export const DEFAULT_VOTER: VoterParams = {
   window: VOTE_WINDOW,
   need: VOTE_NEED,
   threshold: VOTE_THRESHOLD,
-  belowThreshold: 'skip',
+  belowThreshold: 'idle',
+  gestureNeed: GESTURE_NEED,
+  thresholdFast: VOTE_THRESHOLD_FAST,
+  belowThresholdFast: 'skip',
 }
 
 export interface VoterState {
@@ -80,22 +123,33 @@ export interface VoterState {
 
 export const initialVoter = (): VoterState => ({ history: [], stable: 'idle' })
 
-export function stepVoter(s: VoterState, raw: RawPose, p: VoterParams = DEFAULT_VOTER): VoterState {
-  const confident = raw.confidence >= p.threshold
-  if (!confident && p.belowThreshold === 'abstain') return s
-  const vote: Pose | undefined = confident ? raw.label : p.belowThreshold === 'idle' ? 'idle' : undefined
+/**
+ * @param fast рука движется быстрее MOVING_SPEED. Быстрое движение и покой требуют разной
+ * строгости: на покое неуверенный кадр должен голосовать за бездействие, иначе каждое пятое
+ * отпускание ложное; на махе — не должен, иначе отпускания не наступает вовсе.
+ */
+export function stepVoter(s: VoterState, raw: RawPose, p: VoterParams = DEFAULT_VOTER, fast = false): VoterState {
+  const threshold = fast ? p.thresholdFast : p.threshold
+  const below = fast ? p.belowThresholdFast : p.belowThreshold
+  const confident = raw.confidence >= threshold
+  if (!confident && below === 'abstain') return s
+  const vote: Pose | undefined = confident ? raw.label : below === 'idle' ? 'idle' : undefined
   const history = [...s.history, vote].slice(-p.window)
   const counts = new Map<Pose, number>()
   history.forEach((x) => {
     if (x !== undefined) counts.set(x, (counts.get(x) ?? 0) + 1)
   })
+  // «Ничего» — не довод против «чего-то»: жест, который наблюдался, сообщает больше,
+  // чем столько же кадров отсутствия жеста. Поэтому сначала ищется лучший настоящий жест,
+  // и бездействие получает позу, только если ни один жест не набрал своей планки.
   let stable = s.stable
-  let best = p.need - 1
+  let best = p.gestureNeed - 1
   counts.forEach((n, x) => {
-    if (n > best) {
+    if (x !== 'idle' && n > best) {
       best = n
       stable = x
     }
   })
+  if (best < p.gestureNeed && (counts.get('idle') ?? 0) >= p.need) stable = 'idle'
   return { history, stable }
 }

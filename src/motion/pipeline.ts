@@ -1,6 +1,7 @@
 import type { HandId, InputEventMap, InputEventType } from '../contracts/input'
 import { LOST_FAST_SPEED } from './constants'
 import { computeFeatures, type HandFeatures } from './features'
+import { speedOf } from '../shared/velocity'
 import {
   DEFAULT_THRESHOLDS,
   handSpeed,
@@ -15,7 +16,7 @@ import {
 } from './hand-state'
 import { initialHints, stepHints, type HintHandInput, type HintState } from './hints'
 import { initialSwipe, resetSwipe, stepSwipe, type SwipeOutcome, type SwipeState } from './swipe'
-import { initialVoter, stepVoter, type VoterState } from '../gestures/voter'
+import { DEFAULT_VOTER, initialVoter, MOVING_SPEED, stepVoter, type VoterState } from '../gestures/voter'
 import type { Pose } from '../gestures/model'
 import { oneEuro2DStep, oneEuro2DValue, type OneEuro2DState } from './one-euro'
 import { DEFAULT_POINTER, boxToScreen, initialPointer, stepPointer, type PointerBox, type PointerState } from './pointer'
@@ -141,7 +142,11 @@ function stepSeen(track: HandTrack, det: HandDetection, t: number, th: Threshold
   const filter = oneEuro2DStep(track.filter, boxToScreen(features.center, box), t)
   const motion = oneEuro2DValue(filter)
   const holding = isHoldingPhase(track.machine.phase)
-  const voter = det.pose ? stepVoter(track.voter, det.pose) : track.voter
+  // Не «рука летит сейчас», а «рука летела только что»: к моменту, когда ладонь раскрывается,
+  // мах уже кончился и мгновенная скорость нулевая. Машина держит пик в окне THROW_MEMORY_MS
+  // ровно для этого, и та же память решает, по какой строгости голосовать.
+  const fast = speedOf(track.machine.peak) > MOVING_SPEED
+  const voter = det.pose ? stepVoter(track.voter, det.pose, DEFAULT_VOTER, fast) : track.voter
   const pose = det.pose ? voter.stable : undefined
   const shape = pose ? POSE_SHAPE[pose] : { closure: features.closure, indexOnly: features.indexOnly }
   const r = stepHand(track.machine, { t, x: motion.x, y: motion.y, ...shape }, th)

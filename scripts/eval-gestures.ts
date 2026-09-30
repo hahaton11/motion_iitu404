@@ -34,6 +34,16 @@ const HAND = process.env.HAND ?? ''
  */
 const SPLIT = process.env.SPLIT === 'time' ? 'time' : 'round'
 const TRAIN_SHARE = 0.7
+/** Параметры голосователя для перебора: THRESHOLD=0.65 GESTURE_NEED=2. */
+const envNum = (key: string, fallback: number): number => {
+  const v = Number(process.env[key])
+  return Number.isFinite(v) && v > 0 ? v : fallback
+}
+const TUNED: VoterParams = {
+  ...DEFAULT_VOTER,
+  threshold: envNum('THRESHOLD', DEFAULT_VOTER.threshold),
+  gestureNeed: envNum('GESTURE_NEED', DEFAULT_VOTER.gestureNeed),
+}
 
 const file = process.argv[2]
 if (!file) throw new Error('usage: tsx scripts/eval-gestures.ts data/gestures.json')
@@ -134,7 +144,7 @@ const BELOW: Readonly<Record<BelowThreshold, string>> = {
   abstain: 'неуверенный кадр не попадает в окно',
 }
 for (const [belowThreshold, title] of Object.entries(BELOW) as [BelowThreshold, string][]) {
-  report(`4 из 6 кадров: ${title}`, vote(raw, { ...DEFAULT_VOTER, belowThreshold }))
+  report(`4 из 6 кадров: ${title}`, vote(raw, { ...TUNED, belowThreshold }))
 }
 
 // Текущие правила motion: кулак при closure > 0.75 и не указательный, указательный — indexOnly.

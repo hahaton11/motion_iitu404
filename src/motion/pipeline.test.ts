@@ -116,6 +116,18 @@ describe('processFrame with classifier pose', () => {
     expect(gestureEventTypes(runPoses(n(60, ['idle'] as const)))).toEqual([])
   })
 
+  it('grabs on a stable pinch the same way as on a fist', () => {
+    const ev = runPoses([...n(4, ['open'] as const), ...n(6, ['pinch'] as const), ...n(8, ['open'] as const)])
+    expect(gestureEventTypes(ev)).toEqual(['grab', 'release'])
+  })
+
+  // Захват держится на closure, а не на имени позы: смена кулака на щипок посреди переноса
+  // не должна выглядеть как отпускание и новый захват.
+  it('keeps holding when the grab pose switches between fist and pinch', () => {
+    const ev = runPoses([...n(4, ['open'] as const), ...n(6, ['fist'] as const), ...n(6, ['pinch'] as const), ...n(8, ['open'] as const)])
+    expect(gestureEventTypes(ev)).toEqual(['grab', 'release'])
+  })
+
   it('pauses the cursor on idle and reports it as not engaged', () => {
     const ev = runPoses([...n(8, ['open', 0.5] as const), ...Array.from({ length: 20 }, (_, i) => ['idle', 0.5 - i * 0.01] as const)])
     const cursors = ev.filter((e) => e.type === 'cursor')

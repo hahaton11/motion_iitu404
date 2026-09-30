@@ -4,11 +4,14 @@ import { predictKnn, trainKnn, type KnnModel } from './knn'
 
 /**
  * Классификатор позы руки на kNN, обученный на записанном датасете. Файл модели — признаки и метки
- * кадров, среднее и разброс считаются при загрузке. Классы-поглотители (щипок, большой палец)
+ * кадров, среднее и разброс считаются при загрузке. Классы-поглотители (большой палец)
  * забирают на себя похожие полусогнутые позы и на выходе считаются бездействием.
+ *
+ * Щипок — вторая поза захвата рядом с кулаком. Кулак требует держать кисть напряжённой и развёрнутой
+ * к камере, и на этом рука устаёт за секунды; щипок берётся расслабленной рукой под любым ракурсом.
  */
 
-export type Pose = 'idle' | 'open' | 'fist' | 'point' | 'victory'
+export type Pose = 'idle' | 'open' | 'fist' | 'pinch' | 'point' | 'victory'
 
 export interface RawPose {
   readonly label: Pose
@@ -33,7 +36,7 @@ const plainFetch: FetchBytes = async (url) => {
   return new Uint8Array(await res.arrayBuffer())
 }
 
-const POSES: ReadonlySet<string> = new Set<Pose>(['idle', 'open', 'fist', 'point', 'victory'])
+const POSES: ReadonlySet<string> = new Set<Pose>(['idle', 'open', 'fist', 'pinch', 'point', 'victory'])
 const toPose = (label: string, absorb: ReadonlySet<string>): Pose =>
   absorb.has(label) || !POSES.has(label) ? 'idle' : (label as Pose)
 

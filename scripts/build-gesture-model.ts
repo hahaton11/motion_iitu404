@@ -14,7 +14,7 @@ const label = (l: string): string => (l === 'none' || l === 'relaxed' ? 'idle' :
 const file: GestureModelFile = {
   version: 1,
   k: 7,
-  absorb: ['pinch', 'thumb'],
+  absorb: ['thumb'],
   labels: data.samples.map((s) => label(s.label)),
   features: data.samples.map((s) => handFeatures(toLm(s.world), s.handLabel).map(round3)),
 }

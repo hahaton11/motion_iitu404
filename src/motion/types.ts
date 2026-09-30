@@ -1,4 +1,5 @@
 import type { HandId } from '../contracts/input'
+import type { RawPose } from '../gestures/model'
 
 export interface Vec3 {
   readonly x: number
@@ -23,8 +24,12 @@ export interface HandDetection {
   readonly world: Landmarks
   /** Уверенность handedness 0..1. */
   readonly score: number
-  /** Поза от обученного классификатора, если он загружен. Без неё работают правила по углам пальцев. */
-  readonly pose?: { readonly label: 'idle' | 'open' | 'fist' | 'point' | 'victory'; readonly confidence: number }
+  /**
+   * Поза от обученного классификатора, если он загружен. Без неё работают правила по углам пальцев.
+   * Набор поз берётся из `RawPose`, а не выписывается здесь: выписанная копия разошлась с классификатором
+   * при добавлении щипка и держалась только на том, что её заметил `tsc`.
+   */
+  readonly pose?: RawPose
 }
 
 /** Кадр трекера: время в мс и найденные руки. */

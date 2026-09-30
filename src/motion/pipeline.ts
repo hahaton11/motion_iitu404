@@ -106,9 +106,14 @@ interface HandStep {
 /** События машины получают координаты видимого курсора, чтобы элемент падал там, где его видно. */
 const atCursor = (e: HandEvent, p: Vec2): HandEvent => (e.type === 'handlost' ? e : { ...e, x: p.x, y: p.y })
 
-/** Поза → вход машины захвата. Бездействие даёт closure между порогами: состояние не меняется. */
+/**
+ * Поза → вход машины захвата. Бездействие даёт closure между порогами: состояние не меняется.
+ * Захват берут две позы: кулак и щипок. Машине состояний их различать нечем и незачем — она видит
+ * только closure, поэтому обе дают 1, и элемент можно взять кулаком, а отпустить ладонью, и наоборот.
+ */
 const POSE_SHAPE: Readonly<Record<Pose, { closure: number; indexOnly: boolean }>> = {
   fist: { closure: 1, indexOnly: false },
+  pinch: { closure: 1, indexOnly: false },
   open: { closure: 0, indexOnly: false },
   victory: { closure: 0, indexOnly: false },
   point: { closure: 0, indexOnly: true },
@@ -119,13 +124,14 @@ const POSE_SHAPE: Readonly<Record<Pose, { closure: number; indexOnly: boolean }>
 const NEAR_MISS_MIN = 0.4
 
 /**
- * closure для подсказок: «почти кулак» — сырая поза fist с недостаточной уверенностью, «почти ладонь»
- * при удержании — сырая open с недостаточной уверенностью. Иначе вне полосы, подсказок нет.
+ * closure для подсказок: «почти захват» — сырая поза кулака или щипка с недостаточной уверенностью,
+ * «почти ладонь» при удержании — сырая open с недостаточной уверенностью. Иначе вне полосы, подсказок нет.
  */
 function hintClosure(raw: NonNullable<HandDetection['pose']>, holding: boolean, th: Thresholds): number {
   const near = raw.confidence >= NEAR_MISS_MIN && raw.confidence < 0.75
   const inBand = (th.open + th.hold) / 2
-  if (near && raw.label === 'fist' && !holding) return inBand
+  const grabPose = raw.label === 'fist' || raw.label === 'pinch'
+  if (near && grabPose && !holding) return inBand
   if (near && raw.label === 'open' && holding) return inBand
   return holding ? 1 : 0
 }

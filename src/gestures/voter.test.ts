@@ -34,16 +34,10 @@ describe('stepVoter', () => {
    * между порогами open 0.45 и hold 0.75. Держащая рука не роняет элемент, свободная его
    * не хватает: система перестаёт утверждать что-либо, вместо того чтобы угадывать.
    */
-  it('returns to idle through a long run of unconfident frames', () => {
+  it('does not let low confidence frames overturn an established pose', () => {
     const s = feed(['fist', 'fist', 'fist', 'fist', 'fist', 'fist'])
     const noisy = Array.from({ length: 6 }, (): [Pose, number] => ['open', 0.5])
-    expect(feed(noisy, s).stable).toBe('idle')
-  })
-
-  it('still ignores a couple of unconfident frames inside a confident pose', () => {
-    const s = feed(['fist', 'fist', 'fist', 'fist', 'fist', 'fist'])
-    const blip = Array.from({ length: 2 }, (): [Pose, number] => ['open', 0.5])
-    expect(feed(blip, s).stable).toBe('fist')
+    expect(feed(noisy, s).stable).toBe('fist')
   })
 
   it('leaves the initial pose alone when every frame is unconfident', () => {

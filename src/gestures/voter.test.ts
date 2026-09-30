@@ -22,14 +22,28 @@ describe('stepVoter', () => {
   })
 
   /*
-   * Неуверенный кадр — это отсутствие показаний, а не показание в пользу покоя.
-   * Раньше он голосовал за idle, и поза замирала в бездействии ровно на быстром движении
-   * и на развёрнутой ладони, где уверенность падает: бросок из-за этого не собирался.
+   * Затяжной неуверенный ряд возвращает позу в бездействие, а не держит прежнюю.
+   *
+   * Какое-то время здесь было наоборот: неуверенный кадр не голосовал ни за кого, потому что
+   * на записи тех дней это поднимало recall раскрытой ладони с 92.7 до 98.3 %. В той записи
+   * не было класса `none`, и обратной стороны не было видно. На `data/gestures-v4.json`,
+   * где он есть, `open` держит 98.6 % в обоих режимах, а вот ложные отпускания на покое
+   * различаются вчетверо: 22.9 % против 8.7 %.
+   *
+   * Возврат в бездействие безопасен именно потому, что `POSE_SHAPE.idle` даёт closure 0.6 —
+   * между порогами open 0.45 и hold 0.75. Держащая рука не роняет элемент, свободная его
+   * не хватает: система перестаёт утверждать что-либо, вместо того чтобы угадывать.
    */
-  it('does not let low confidence frames overturn an established pose', () => {
+  it('returns to idle through a long run of unconfident frames', () => {
     const s = feed(['fist', 'fist', 'fist', 'fist', 'fist', 'fist'])
     const noisy = Array.from({ length: 6 }, (): [Pose, number] => ['open', 0.5])
-    expect(feed(noisy, s).stable).toBe('fist')
+    expect(feed(noisy, s).stable).toBe('idle')
+  })
+
+  it('still ignores a couple of unconfident frames inside a confident pose', () => {
+    const s = feed(['fist', 'fist', 'fist', 'fist', 'fist', 'fist'])
+    const blip = Array.from({ length: 2 }, (): [Pose, number] => ['open', 0.5])
+    expect(feed(blip, s).stable).toBe('fist')
   })
 
   it('leaves the initial pose alone when every frame is unconfident', () => {

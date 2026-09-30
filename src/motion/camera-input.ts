@@ -204,9 +204,11 @@ export class CameraInput implements InputSource {
     const job = this.calibration
     if (!job) return
     const hand = hands.find((h) => h.hand === 'right') ?? hands[0]
-    const state = stepCalibration(job.state ?? startCalibration(t), t, hand?.features.closure)
+    // Геометрия, а не признаки для подсказок: калибровка ставит пороги и не может измерять
+    // величину, которая сама из них выведена.
+    const state = stepCalibration(job.state ?? startCalibration(t), t, hand?.geometry.closure)
     job.state = state
-    if (state.step === 'open' && hand) job.centers.push(hand.features.center)
+    if (state.step === 'open' && hand) job.centers.push(hand.geometry.center)
     const prompt = state.step === 'failed' ? (state.error ?? CALIBRATION_PROMPTS.failed) : CALIBRATION_PROMPTS[state.step]
     job.onProgress?.({ step: state.step, prompt, progress: calibrationProgress(state, t), error: state.error })
     if (state.step === 'done' && state.result) {

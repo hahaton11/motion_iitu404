@@ -55,7 +55,18 @@ export interface PipelineState {
 export interface HandDebug {
   readonly hand: HandId
   readonly detection: HandDetection
+  /**
+   * Признаки кадра, в которых `closure` подменён служебным значением для подсказок.
+   * Для всего, что меряет саму руку, а не решает, показать ли подсказку, есть `geometry`.
+   */
   readonly features: HandFeatures
+  /**
+   * Настоящие признаки: `closure` посчитан по углам пальцев и ни от чего не зависит.
+   * Калибровке нужен именно он — она устанавливает пороги, и измерять их же производную
+   * значило бы замкнуть круг: пока классификатор не переведёт руку в захват, оба шага
+   * дают одно и то же, диапазон выходит нулевым и калибровка падает на ровном месте.
+   */
+  readonly geometry: HandFeatures
   readonly phase: HandPhase
   readonly screen: Vec2
   /** Устойчивая поза классификатора, если он работает. */
@@ -155,7 +166,16 @@ function stepSeen(track: HandTrack, det: HandDetection, t: number, th: Threshold
   const p = stepPointer(track.pointer, features.center, t, { holding, transitioning, paused }, { ...DEFAULT_POINTER, box })
   const screen = p.screen
   const hintFeatures = det.pose ? { ...features, closure: hintClosure(det.pose, holding, th) } : features
-  const debug: HandDebug = { hand: det.hand, detection: det, features: hintFeatures, phase: r.state.phase, screen, paused, ...(pose ? { pose } : {}) }
+  const debug: HandDebug = {
+    hand: det.hand,
+    detection: det,
+    features: hintFeatures,
+    geometry: features,
+    phase: r.state.phase,
+    screen,
+    paused,
+    ...(pose ? { pose } : {}),
+  }
   const machineEvents = r.events.map((e) => atCursor(e, screen))
   const sw = stepSwipe(track.swipe, { t, p: motion, holding: isHoldingPhase(r.state.phase) })
   const next = { ...track, machine: r.state, filter, pointer: p.state, swipe: sw.state, voter }

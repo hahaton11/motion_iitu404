@@ -207,6 +207,16 @@ describe('processFrame hints', () => {
     expect(hints.map((h) => h.type === 'hint' && h.e.code)).toContain('MOVING_TOO_FAST')
   })
 
+  /*
+   * Рука, уведённая за край, убрана намеренно, а не потеряна трекером. «Камера не успевает»
+   * в ответ на нормальное действие — ложная подсказка, а она хуже отсутствующей.
+   */
+  it('stays quiet when a fast hand leaves through the edge of the frame', () => {
+    const leaving = [0, 1, 2, 3].map((i) => one({ pose: POSES.open, x: 0.5 + i * 0.12 }))
+    const hints = run([...leaving, ...times(12, [])]).events.filter((e) => e.type === 'hint')
+    expect(hints.map((h) => h.type === 'hint' && h.e.code)).not.toContain('MOVING_TOO_FAST')
+  })
+
   it('asks to close the fist fully for a half grab', () => {
     const hints = run(times(30, one({ pose: POSES.half }))).events.filter((e) => e.type === 'hint')
     expect(hints.map((h) => h.type === 'hint' && h.e.code)).toEqual(['HALF_GRAB'])

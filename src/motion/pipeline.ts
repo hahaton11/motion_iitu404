@@ -1,5 +1,6 @@
 import type { HandId, InputEventMap, InputEventType } from '../contracts/input'
-import { LOST_FAST_SPEED } from './constants'
+import { EDGE_HINT_MARGIN, LOST_FAST_SPEED } from './constants'
+import { edgeDistance } from './landmarks'
 import { computeFeatures, type HandFeatures } from './features'
 import { speedOf } from '../shared/velocity'
 import {
@@ -208,7 +209,11 @@ function stepMissing(track: HandTrack, t: number): HandStep {
     ? [fromMachine ? { ...fromMachine, x, y } : { type: 'release', x, y, vx: 0, vy: 0 }]
     : []
   const events: HandEvent[] = [...release, { type: 'handlost' }]
-  return { track: emptyTrack(), machineEvents: events, debug: undefined, lostFast: speed > LOST_FAST_SPEED }
+  // Рука, уведённая за край кадра, не потеряна, а убрана: это нормальное действие, и говорить
+  // «камера не успевает» в ответ на него — ложная подсказка. Отказом считается только рука,
+  // пропавшая посреди кадра, где ей пропадать незачем.
+  const vanishedInside = edgeDistance({ x, y }) >= EDGE_HINT_MARGIN
+  return { track: emptyTrack(), machineEvents: events, debug: undefined, lostFast: vanishedInside && speed > LOST_FAST_SPEED }
 }
 
 function toOut(hand: HandId, e: HandEvent): OutEvent {
@@ -264,13 +269,19 @@ function cursorOf(d: HandDebug, track: HandTrack): OutEvent {
   return { type: 'cursor', e }
 }
 
+/**
+ * Подсказки про полужесты меряют геометрию, а не позу классификатора. С загруженной моделью
+ * `features.closure` равен 0 или 1: полусжатого кулака в нём не существует, и «сожми кулак
+ * полностью» не могло сработать ни разу. Углы пальцев знают про промежуточные положения,
+ * и условие снова означает то, что написано в тексте.
+ */
 function hintInputs(debug: readonly HandDebug[]): HintHandInput[] {
   return debug.map((d) => ({
     hand: d.hand,
     phase: d.phase,
-    closure: d.features.closure,
-    center: d.features.center,
-    palmSize: d.features.palmSize,
+    closure: d.geometry.closure,
+    center: d.geometry.center,
+    palmSize: d.geometry.palmSize,
     score: d.detection.score,
   }))
 }

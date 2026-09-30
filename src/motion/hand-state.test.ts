@@ -90,6 +90,38 @@ describe('stepHand throw', () => {
     expect(last.type === 'throw' && last.vx).toBeGreaterThan(2.2)
   })
 
+  /**
+   * Живой отказ, который ни один тест не ловил: смоук гоняет мышь, где closure падает в тот же кадр,
+   * когда рука остановилась. С камерой позу раскрытия приносит голосователь — 4 уверенных кадра из 6,
+   * то есть около 400 мс на 15 кадрах в секунду. К этому моменту рука уже стоит.
+   */
+  it('throws when the opening pose arrives after the fling has already stopped', () => {
+    const grab = repeat({ closure: 0.9, x: 0.2 }, 3)
+    const fling = [1, 2, 3].map((i) => ({ closure: 0.9, x: 0.2 + i * 0.12 }))
+    const stopped = repeat({ closure: 0.9, x: 0.56 }, 5)
+    const opens = repeat({ closure: 0.1, x: 0.56 }, 1)
+    const r = runFrames(frames([...grab, ...fling, ...stopped, ...opens]))
+    const last = r.events[r.events.length - 1]!
+    expect(last.type).toBe('throw')
+    expect(last.type === 'throw' && Math.hypot(last.vx, last.vy)).toBeGreaterThan(2.2)
+  })
+
+  it('forgets the fling once the hand has been still longer than the memory window', () => {
+    const grab = repeat({ closure: 0.9, x: 0.2 }, 3)
+    const fling = [1, 2, 3].map((i) => ({ closure: 0.9, x: 0.2 + i * 0.12 }))
+    // 20 кадров по 33 мс — 660 мс покоя, дольше THROW_MEMORY_MS: это перенос, а не бросок.
+    const still = repeat({ closure: 0.9, x: 0.56 }, 20)
+    const opens = repeat({ closure: 0.1, x: 0.56 }, 3)
+    expect(types(runFrames(frames([...grab, ...fling, ...still, ...opens])).events)).toEqual(['grab', 'release'])
+  })
+
+  it('does not count the sweep that reached the element as a throw', () => {
+    const approach = [0, 1, 2, 3].map((i) => ({ closure: 0.1, x: 0.2 + i * 0.12 }))
+    const grab = repeat({ closure: 0.9, x: 0.56 }, 3)
+    const opens = repeat({ closure: 0.1, x: 0.56 }, 3)
+    expect(types(runFrames(frames([...approach, ...grab, ...opens])).events)).toEqual(['grab', 'release'])
+  })
+
   it('keeps a slow release as release', () => {
     const seq = [...repeat({ closure: 0.9 }, 4), ...[0.3, 0.2, 0.1].map((closure, i) => ({ closure, x: 0.5 + i * 0.005 }))]
     expect(types(runFrames(frames(seq)).events)).toEqual(['grab', 'release'])

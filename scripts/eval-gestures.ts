@@ -21,12 +21,56 @@ const CLASSES: readonly Cls[] = (['idle', 'open', 'fist', 'pinch', 'point', 'vic
 const toCls = (l: GestureLabel): Cls => (l === 'none' || l === 'relaxed' ? 'idle' : l)
 const toLm = (pts: readonly (readonly number[])[]): Landmarks => pts.map(([x = 0, y = 0, z = 0]) => ({ x, y, z }))
 
+/** Только кадры этой руки: HAND=Right. Пусто — обе. */
+const HAND = process.env.HAND ?? ''
+/**
+ * Чем отложенная часть отделена от обучающей.
+ * `round` (по умолчанию) — первый круг учит, второй проверяет. Честнее всего, пока оба круга
+ *   сняты в одинаковых условиях. Если посреди записи сменилась рука или свет, этот split
+ *   померяет перенос между условиями, а не качество распознавания.
+ * `time` — внутри каждой группы «класс + круг + рука» первые 70 % кадров учат, последние 30 %
+ *   проверяют. Соседние кадры похожи, поэтому цифра выйдет оптимистичнее отложенного круга,
+ *   но она хотя бы отвечает на заданный вопрос.
+ */
+const SPLIT = process.env.SPLIT === 'time' ? 'time' : 'round'
+const TRAIN_SHARE = 0.7
+
 const file = process.argv[2]
 if (!file) throw new Error('usage: tsx scripts/eval-gestures.ts data/gestures.json')
 const data = JSON.parse(readFileSync(file, 'utf8')) as Dataset
-const rows = data.samples.filter((s) => !DROP.has(s.label) || ABSORB.has(s.label)).map((s) => ({ s, cls: toCls(s.label), f: handFeatures(toLm(s.world), s.handLabel) }))
-const train = rows.filter((r) => r.s.round === 0)
-const test = rows.filter((r) => r.s.round === 1 && !ABSORB.has(r.cls))
+type Row = { s: Dataset['samples'][number]; cls: Cls; f: readonly number[] }
+const rows: Row[] = data.samples
+  .filter((s) => (!DROP.has(s.label) || ABSORB.has(s.label)) && (!HAND || s.handLabel === HAND))
+  .map((s) => ({ s, cls: toCls(s.label), f: handFeatures(toLm(s.world), s.handLabel) }))
+
+function splitByTime(all: readonly Row[]): { train: Row[]; test: Row[] } {
+  const groups = new Map<string, Row[]>()
+  all.forEach((r) => {
+    const key = `${r.s.label}|${r.s.round}|${r.s.handLabel}`
+    const g = groups.get(key)
+    if (g) g.push(r)
+    else groups.set(key, [r])
+  })
+  const train: Row[] = []
+  const test: Row[] = []
+  groups.forEach((g) => {
+    const sorted = [...g].sort((a, b) => a.s.t - b.s.t)
+    const cut = Math.floor(sorted.length * TRAIN_SHARE)
+    sorted.forEach((r, i) => (i < cut ? train : test).push(r))
+  })
+  // Голосователь сбрасывается на смене класса и на разрыве во времени, поэтому отложенная
+  // часть идёт классами подряд и по возрастанию времени внутри класса.
+  test.sort((a, b) => (a.cls === b.cls ? a.s.t - b.s.t : a.cls.localeCompare(b.cls)))
+  return { train, test }
+}
+
+const split =
+  SPLIT === 'time'
+    ? splitByTime(rows)
+    : { train: rows.filter((r) => r.s.round === 0), test: rows.filter((r) => r.s.round === 1) }
+const train = split.train
+const test = split.test.filter((r) => !ABSORB.has(r.cls))
+console.log(`split=${SPLIT}${HAND ? ` hand=${HAND}` : ''}: обучение ${train.length} кадров, проверка ${test.length}`)
 
 const model = trainKnn(train.map((r) => r.f), train.map((r) => r.cls), 7)
 const raw = test.map((r) => {

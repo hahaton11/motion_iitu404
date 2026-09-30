@@ -1,8 +1,19 @@
+/*
+ * Страница подключает style.css, но не тему доски, где заданы --mb-*. Поэтому --fg, --muted
+ * и --accent здесь не определялись ниоткуда: заголовки карточек и главная кнопка получали
+ * невалидный цвет и сливались с фоном. Значения берутся из темы, если она есть, иначе свои.
+ */
 .md {
   --panel: #121826;
   --line: #243049;
   --warn: #ffb35a;
   --ok: #6be38f;
+  --fg: var(--mb-fg, #e6edf7);
+  --muted: var(--mb-muted, #9aa8c0);
+  --accent: var(--mb-accent, #5ad1ff);
+  color: var(--fg);
+  background: var(--mb-bg, #06090f);
+  font: 15px/1.45 var(--mb-font, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif);
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
   gap: 16px;
@@ -15,7 +26,13 @@
 .md-panel { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; }
 .md-card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
 .md-card h3 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
-.md-row { display: flex; justify-content: space-between; gap: 8px; font: 12px/1.6 ui-monospace, Menlo, Consolas, monospace; }
+.md-row { display: flex; justify-content: space-between; gap: 8px; font: 13px/1.7 ui-monospace, Menlo, Consolas, monospace; }
+/* Подпись приглушена, показание — контрастное: панель читают ради правой колонки. */
+.md-row > span:first-child { color: var(--muted); }
+.md-row > span:last-child { color: var(--fg); font-weight: 600; text-align: right; }
+/* Карточка «Кадр» — то, по чему меряют производительность. Её показания крупнее остальных. */
+.md-frame .md-row { font-size: 16px; line-height: 1.9; }
+.md-frame .md-row > span:last-child { color: var(--accent); }
 .md-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .md-buttons button, .md-buttons select { font: inherit; padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: #1a2336; color: var(--fg); cursor: pointer; }
 .md-buttons button:disabled { opacity: 0.45; cursor: default; }

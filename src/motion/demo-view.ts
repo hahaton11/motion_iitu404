@@ -49,7 +49,7 @@ const TEMPLATE = html`<div class="md">
         <button data-a="frames" disabled>Сохранить кадры</button>
       </div>
     </section>
-    <section class="md-card">
+    <section class="md-card md-frame">
       <h3>Кадр</h3>
       <div class="md-row"><span>FPS</span><span data-f="fps">—</span></div>
       <div class="md-row"><span>обработка кадра</span><span data-f="latency">—</span></div>

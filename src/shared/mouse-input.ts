@@ -1,5 +1,5 @@
 import type { HandId, InputSource, SwipeDir } from '../contracts/input'
-import { MOUSE_PINCH_ZOOM_GAIN, POINT_HOLD_MS, PUT_WINDOW_MS, THROW_MEMORY_MS, THROW_SPEED } from './constants'
+import { MOUSE_PINCH_TILT_GAIN_DEG, MOUSE_PINCH_ZOOM_GAIN, POINT_HOLD_MS, PUT_WINDOW_MS, THROW_MEMORY_MS, THROW_SPEED } from './constants'
 import { InputEmitter } from './emitter'
 import { VelocityTracker, speedOf } from './velocity'
 
@@ -33,8 +33,8 @@ export class MouseInput implements InputSource {
   private clickAt: number | undefined
   /** Где была мышь на прошлом событии панорамы. undefined — панорамы нет. */
   private panFrom: { x: number; y: number } | undefined
-  /** Зум щипком: центр масштаба и y мыши на прошлом событии. undefined — зума нет. */
-  private pinch: { cx: number; cy: number; y: number } | undefined
+  /** Зум щипком: центр масштаба, x и y мыши на прошлом событии. undefined — зума нет. */
+  private pinch: { cx: number; cy: number; x: number; y: number } | undefined
   private space = false
   private pointTimer: ReturnType<typeof setTimeout> | undefined
   private readonly disposers: Array<() => void> = []
@@ -115,7 +115,7 @@ export class MouseInput implements InputSource {
     // не нажата — жест закончился, чем бы ни было потеряно отпускание.
     if ((this.pinch || this.panFrom) && e.buttons === 0) this.endDrag(x, y)
     if (this.pinch) {
-      this.movePinch(y)
+      this.movePinch(x, y)
       return
     }
     const from = this.panFrom
@@ -128,13 +128,17 @@ export class MouseInput implements InputSource {
     this.emitCursor(x, y)
   }
 
-  /** Курсор стоит в центре масштаба, доска масштабируется по вертикальному ходу мыши, горизонталь не в счёт. */
-  private movePinch(y: number): void {
+  /**
+   * Курсор стоит в центре масштаба. Вертикальный ход мыши масштабирует доску, горизонтальный
+   * кренит её плоскость — те же две оси, что у щипка живой рукой.
+   */
+  private movePinch(x: number, y: number): void {
     const pinch = this.pinch
     if (!pinch) return
     this.emitCursor(pinch.cx, pinch.cy)
-    this.pinch = { ...pinch, y }
+    this.pinch = { ...pinch, x, y }
     if (y !== pinch.y) this.em.emit('zoom', { factor: Math.exp(-(y - pinch.y) * MOUSE_PINCH_ZOOM_GAIN), cx: pinch.cx, cy: pinch.cy })
+    if (x !== pinch.x) this.em.emit('tilt', { hand: 'right', delta: (x - pinch.x) * MOUSE_PINCH_TILT_GAIN_DEG })
   }
 
   private emitCursor(x: number, y: number): void {
@@ -156,7 +160,7 @@ export class MouseInput implements InputSource {
     if (e.button !== LEFT_BUTTON) return
     if (e.altKey && !this.busy) {
       e.preventDefault()
-      this.pinch = { cx: x, cy: y, y }
+      this.pinch = { cx: x, cy: y, x, y }
       this.emitCursor(x, y)
       return
     }

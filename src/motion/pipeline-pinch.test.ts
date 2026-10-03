@@ -78,19 +78,29 @@ describe('processFrame: one-hand pinch zoom', () => {
     expect(first.factor).toBeLessThan(1.08)
   })
 
-  it('a sideways move with the pinch neither zooms nor pans', () => {
+  it('a sideways move with the pinch tilts and nothing else: no zoom, no pan, no grab', () => {
     const frames = run([...still('open', 6), ...still('pinch', 6), ...sideways('pinch', 20, 0.5, -0.005)])
-    expect(gestureEventTypes(frames.flat())).toEqual([])
+    expect(new Set(gestureEventTypes(frames.flat()))).toEqual(new Set(['tilt']))
   })
 
   /*
-   * Жест держится, доска стоит — без подсказки это читается как поломка. Проверяется на всём
-   * конвейере, а не только в чистой функции: флаг идёт от stepPinchZoom через кадр жестов
-   * в детектор подсказок, и разрыв в этой цепочке молчал бы точно так же, как её отсутствие.
+   * Наклон проверяется на всём конвейере, а не только в чистой функции: величина идёт
+   * от stepPinchZoom через кадр жестов в события контракта, и разрыв в этой цепочке выглядел бы
+   * ровно как отсутствие жеста.
    */
-  it('says to lead the pinch vertically when it is led sideways long enough', () => {
-    const frames = run([...still('open', 6), ...still('pinch', 6), ...sideways('pinch', 45, 0.5, -0.005)])
-    expect(hints(frames.flat())).toContain('PINCH_SIDEWAYS')
+  it('a sideways pinch sends tilt events and no zoom', () => {
+    const frames = run([...still('open', 6), ...still('pinch', 6), ...sideways('pinch', 30, 0.5, -0.005)])
+    const tilts = frames.flat().flatMap((e) => (e.type === 'tilt' ? [e.e] : []))
+    expect(tilts.length).toBeGreaterThan(3)
+    expect(zooms(frames.flat())).toEqual([])
+    expect(tilts.every((t) => t.hand === 'right')).toBe(true)
+    // Рука идёт в одну сторону: все приращения одного знака, доска кренится, а не дрожит.
+    expect(new Set(tilts.map((t) => Math.sign(t.delta))).size).toBe(1)
+  })
+
+  it('a vertical pinch sends no tilt', () => {
+    const frames = run([...still('open', 6), ...still('pinch', 6), ...vertical('pinch', 15, Y0, -0.004)])
+    expect(frames.flat().filter((e) => e.type === 'tilt')).toEqual([])
   })
 
   it('zooms around the cursor where the pinch closed, which stays put and is marked zooming', () => {

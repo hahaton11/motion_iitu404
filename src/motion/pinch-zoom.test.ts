@@ -14,14 +14,14 @@ const frame = (x: number, y: number, o: Partial<PinchZoomInput> = {}): PinchZoom
 
 const run = (inputs: readonly PinchZoomInput[]) => {
   let s: PinchZoomState = initialPinchZoom()
-  const sideways: boolean[] = []
+  const tilts: (number | undefined)[] = []
   const zooms = inputs.map((i) => {
     const r = stepPinchZoom(s, i)
     s = r.state
-    sideways.push(r.sideways === true)
+    tilts.push(r.tilt)
     return r.zoom
   })
-  return { zooms, sideways, state: s }
+  return { zooms, tilts, state: s }
 }
 
 const product = (zs: ReturnType<typeof run>['zooms']): number => zs.reduce((a, z) => a * (z?.factor ?? 1), 1)
@@ -56,16 +56,25 @@ describe('stepPinchZoom', () => {
     expect(r.zooms[2]!.factor).toBeGreaterThan(1)
   })
 
-  it('does not zoom on a sideways move and says so, for the hint', () => {
+  /** Ход вбок масштаб не меняет: он кренит плоскость. Оси разделены, обе сразу не срабатывают. */
+  it('a sideways move tilts the board instead of zooming it', () => {
     const r = run([frame(0.5, 0.5), ...Array.from({ length: 10 }, (_, i) => frame(0.5 + (i + 1) * 0.02, 0.5 + (i % 2) * 0.005))])
     expect(product(r.zooms)).toBe(1)
-    expect(r.sideways.filter(Boolean).length).toBeGreaterThan(0)
+    const tilted = r.tilts.filter((t): t is number => t !== undefined)
+    expect(tilted.length).toBeGreaterThan(0)
+    expect(tilted.every((t) => t > 0)).toBe(true)
   })
 
-  /** Ход вверх — это зум, а не «вбок»: иначе подсказка вылетала бы посреди нормального жеста. */
-  it('a vertical move is never reported as sideways', () => {
+  it('the tilt follows the direction of the sideways move', () => {
+    const left = run([frame(0.5, 0.5), frame(0.4, 0.5), frame(0.3, 0.5)])
+    expect(left.tilts.filter((t): t is number => t !== undefined).every((t) => t < 0)).toBe(true)
+  })
+
+  /** Ход вверх — это зум: наклон при нём не трогается, иначе доска кренилась бы от масштабирования. */
+  it('a vertical move never tilts', () => {
     const r = run([frame(0.5, 0.5), frame(0.5, 0.42), frame(0.5, 0.34)])
-    expect(r.sideways).toEqual([false, false, false])
+    expect(r.tilts).toEqual([undefined, undefined, undefined])
+    expect(product(r.zooms)).toBeGreaterThan(1)
   })
 
   it('does not move on frames where the raw pose is not a pinch', () => {

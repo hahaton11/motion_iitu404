@@ -63,15 +63,15 @@ export interface PinchFrame {
   readonly pinch: PinchZoomState
   readonly zoom: ZoomEvt | undefined
   readonly nearPinch: NearMiss
-  /** Щипок вели вбок: жест держится, а масштаб не меняется. Для подсказки. */
-  readonly sideways: boolean
+  /** Приращение наклона доски от хода щипка вбок, в градусах. */
+  readonly tilt: number | undefined
 }
 
 /** cursor — курсор, который пользователь видел до этого кадра: центр масштаба. */
 export function pinchFrame(pinch: PinchZoomState, nearAt: number | undefined, i: GestureFrameInput, cursor: Vec2): PinchFrame {
   const active = i.pose === PINCH_POSE && !i.holding
   const r = stepPinchZoom(pinch, { active, steady: i.raw?.label === PINCH_POSE, p: i.motion, cursor })
-  return { pinch: r.state, zoom: r.zoom, nearPinch: nearMiss(nearAt, PINCH_POSE, i), sideways: r.sideways === true }
+  return { pinch: r.state, zoom: r.zoom, nearPinch: nearMiss(nearAt, PINCH_POSE, i), tilt: r.tilt }
 }
 
 /**

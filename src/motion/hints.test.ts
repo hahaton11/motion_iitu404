@@ -84,17 +84,6 @@ describe('stepHints', () => {
   })
 
   /*
-   * Щипок вбок не меняет масштаб намеренно: смена формы кисти сдвигает центр ладони, и ход вбок
-   * нельзя отличить от этого сдвига. Снаружи это выглядит как сломанный жест, отсюда подсказка.
-   */
-  it('PINCH_SIDEWAYS when the pinch is led sideways long enough', () => {
-    expect(runFor({ hands: [hand({ pinchSideways: true })] }, 600)).toEqual([])
-    const hs = runFor({ hands: [hand({ pinchSideways: true })] }, 900)
-    expect(codes(hs)).toEqual(['PINCH_SIDEWAYS'])
-    expect(hs[0]!.message).toBe('Веди щипок вверх или вниз: в сторону масштаб не меняется')
-  })
-
-  /*
    * Рука с элементом доску не двигает: иначе она уезжала бы из-под переносимого элемента.
    * Подсказка говорит, что делать, — положить, — а не что жест неправильный.
    */

@@ -51,3 +51,5 @@ export const VELOCITY_WINDOW_MS = 80
  * dy в долях экрана. Совпадает с усилением зума щипком у камеры: мышь учит тому же движению.
  */
 export const MOUSE_PINCH_ZOOM_GAIN = 2.5
+/** Градусов наклона на ход мыши во всю ширину окна при Alt-перетаскивании. Как PINCH_TILT_GAIN_DEG у руки. */
+export const MOUSE_PINCH_TILT_GAIN_DEG = 60

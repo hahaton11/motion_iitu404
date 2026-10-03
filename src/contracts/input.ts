@@ -76,6 +76,16 @@ export interface PanEvt {
   readonly dy: number
 }
 
+/**
+ * Наклон плоскости доски: приращение в градусах с прошлого события. Щипок одной рукой,
+ * ход вбок — та же поза, что масштабирует ходом вверх и вниз, только другая ось.
+ * Источники, которые наклон не умеют, событие не шлют.
+ */
+export interface TiltEvt {
+  readonly hand: HandId
+  readonly delta: number
+}
+
 export type SwipeDir = 'left' | 'right' | 'up' | 'down'
 
 /** Короткий взмах рукой. Направление на экране, уже зеркально. Приходит после завершения движения. */
@@ -127,6 +137,7 @@ export interface InputEventMap {
   point: PointEvt
   zoom: ZoomEvt
   pan: PanEvt
+  tilt: TiltEvt
   swipe: SwipeEvt
   handlost: HandLostEvt
   hint: HintEvt

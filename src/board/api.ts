@@ -87,7 +87,7 @@ export interface Board {
   destroy(): void
 }
 
-const INPUT_TYPES: readonly InputEventType[] = ['cursor', 'grab', 'release', 'throw', 'point', 'zoom', 'pan', 'handlost']
+const INPUT_TYPES: readonly InputEventType[] = ['cursor', 'grab', 'release', 'throw', 'point', 'zoom', 'pan', 'tilt', 'handlost']
 
 /** Сдвиг позиции по умолчанию для подряд добавленных элементов, чтобы они не ложились друг на друга. */
 const CASCADE_STEP = 28

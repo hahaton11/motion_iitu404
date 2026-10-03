@@ -7,6 +7,7 @@ import type {
   PanEvt,
   PointEvt,
   ReleaseEvt,
+  TiltEvt,
   ZoomEvt,
 } from '../contracts/input'
 import { FOCUS_RADIUS_PX, FOCUS_STICKY_PX, focusAt } from './focus'
@@ -97,6 +98,7 @@ export type ControllerInput =
   | { readonly type: 'point'; readonly e: PointEvt }
   | { readonly type: 'zoom'; readonly e: ZoomEvt }
   | { readonly type: 'pan'; readonly e: PanEvt }
+  | { readonly type: 'tilt'; readonly e: TiltEvt }
   | { readonly type: 'handlost'; readonly e: HandLostEvt }
   /** Отпускание перехвачено снаружи (карман): снять удержание без анимации падения. */
   | { readonly type: 'consume'; readonly hand: HandId }
@@ -236,6 +238,14 @@ function onPan(c: ControllerState, e: PanEvt, ctx: StepContext): StepResult {
   if (c.zooming || h.mode === 'hold' || h.mode === 'grip') return result(c)
   const next = setHand(c, e.hand, { ...withoutHover(h), mode: 'pan' })
   return result(next, [{ type: 'pan', dx: e.dx * ctx.viewport.w, dy: e.dy * ctx.viewport.h }])
+}
+
+/**
+ * Наклон плоскости доски ходом щипка вбок. Рука в это время уже в режиме зума, поэтому
+ * состояние руки трогать не надо: меняется только сцена.
+ */
+function onTilt(c: ControllerState, e: TiltEvt): StepResult {
+  return result(c, [{ type: 'tilt', delta: e.delta }])
 }
 
 function onGrab(c: ControllerState, e: GrabEvt, ctx: StepContext): StepResult {
@@ -382,6 +392,8 @@ export function step(c: ControllerState, input: ControllerInput, ctx: StepContex
       return onZoom(c, input.e, ctx)
     case 'pan':
       return onPan(c, input.e, ctx)
+    case 'tilt':
+      return onTilt(c, input.e)
     case 'handlost':
       return onLost(c, input.e.hand, ctx)
     case 'consume':

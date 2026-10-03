@@ -95,8 +95,8 @@ export interface HandDebug {
   readonly zooming: boolean
   /** Классификатор видит щипок, но неуверенно: для подсказки. */
   readonly nearPinch: boolean
-  /** Щипок ведут вбок, масштаб не меняется: для подсказки. */
-  readonly pinchSideways: boolean
+  /** Наклон доски, который этот кадр дал ходом щипка вбок: для отладочной страницы. */
+  readonly tilt: number | undefined
   /** Рука с элементом показывает жест доски, доска не двигается: для подсказки. */
   readonly navLocked: boolean
   /** Перенос прилипшего элемента: для подсказок. */
@@ -161,6 +161,8 @@ interface HandStep {
   readonly pan?: Vec2
   /** Зум щипком в этом кадре. */
   readonly pinchZoom?: ZoomEvt
+  /** Наклон доски ходом щипка вбок в этом кадре, в градусах. */
+  readonly tilt?: number
 }
 
 /** События машины получают координаты видимого курсора, чтобы элемент падал там, где его видно. */
@@ -229,7 +231,7 @@ function stepSeen(track: HandTrack, det: HandDetection, t: number, th: Threshold
     nearPan: pf.nearPan.near,
     zooming,
     nearPinch: zf.nearPinch.near,
-    pinchSideways: zf.sideways,
+    tilt: zf.tilt,
     navLocked: navLocked(g),
     carry: { carrying: r.state.carry, swingAt: r.state.swingAt, slowThrowAt: r.state.slowThrowAt },
     ...(pose ? { pose } : {}),
@@ -239,7 +241,12 @@ function stepSeen(track: HandTrack, det: HandDetection, t: number, th: Threshold
   const sw = panning || zooming ? { state: resetSwipe(track.swipe), outcome: undefined } : stepSwipe(track.swipe, { t, p: motion, holding: isHoldingPhase(r.state.phase) })
   const gestures = { pan: pf.pan, nearPanAt: pf.nearPan.at, pinch: zf.pinch, nearPinchAt: zf.nearPinch.at }
   const next = { ...track, machine: r.state, filter, pointer: p.state, swipe: sw.state, voter, ...gestures }
-  const extra = { ...(sw.outcome ? { swipe: sw.outcome } : {}), ...(pf.delta ? { pan: pf.delta } : {}), ...(zf.zoom ? { pinchZoom: zf.zoom } : {}) }
+  const extra = {
+    ...(sw.outcome ? { swipe: sw.outcome } : {}),
+    ...(pf.delta ? { pan: pf.delta } : {}),
+    ...(zf.zoom ? { pinchZoom: zf.zoom } : {}),
+    ...(zf.tilt !== undefined ? { tilt: zf.tilt } : {}),
+  }
   return { track: next, machineEvents, debug, lostFast: false, ...extra }
 }
 
@@ -255,6 +262,12 @@ function swipeEvents(hand: HandId, step: HandStep, suppress: boolean): OutEvent[
 function panEvents(hand: HandId, step: HandStep, suppress: boolean): OutEvent[] {
   const d = step.pan
   return d && !suppress ? [{ type: 'pan', e: { hand, dx: d.x, dy: d.y } }] : []
+}
+
+/** Наклон доски ходом щипка вбок. Во время zoom двумя руками не шлётся, как и всё остальное. */
+function tiltEvents(hand: HandId, step: HandStep, suppress: boolean): OutEvent[] {
+  const d = step.tilt
+  return d !== undefined && !suppress ? [{ type: 'tilt', e: { hand, delta: d } }] : []
 }
 
 /**
@@ -363,7 +376,6 @@ function hintInputs(debug: readonly HandDebug[]): HintHandInput[] {
     score: d.detection.score,
     nearPan: d.nearPan,
     nearPinch: d.nearPinch,
-    pinchSideways: d.pinchSideways,
     navLocked: d.navLocked,
     pinching: d.pose === PINCH_POSE || d.detection.pose?.label === PINCH_POSE,
     carry: d.carry,
@@ -389,6 +401,7 @@ export function processFrame(s: PipelineState, frame: TrackerFrame): FrameResult
     ...final.flatMap((x) => x.out),
     ...(tz.zoom ? [{ type: 'zoom', e: tz.zoom } as const] : []),
     ...HAND_IDS.flatMap((hand, i) => panEvents(hand, steps[i]!, tz.suppress)),
+    ...HAND_IDS.flatMap((hand, i) => tiltEvents(hand, steps[i]!, tz.suppress)),
     ...pinchZoomEvents(steps, tz.suppress || tz.zoom !== undefined),
     ...HAND_IDS.flatMap((hand, i) => swipeEvents(hand, steps[i]!, tz.suppress || tz.zoom !== undefined)),
     ...hints.hints.map((e) => ({ type: 'hint', e }) as const),

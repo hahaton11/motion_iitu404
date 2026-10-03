@@ -238,10 +238,21 @@ describe('controller: pan and zoom', () => {
     expect(h.cursor(0.05, 0.05, 'left', 1).effects).toEqual([])
   })
 
-  it('zoom scales around the pivot', () => {
+  it('zoom scales around the pivot and keeps the tilt of the scene', () => {
     const h = board()
+    const tilt = h.state.camera.tilt
     h.send({ type: 'zoom', e: { factor: 2, cx: 0.5, cy: 0.5 } })
-    expect(h.state.camera).toEqual({ x: 0, y: 0, zoom: 2 })
+    expect(h.state.camera).toEqual({ x: 0, y: 0, zoom: 2, tilt })
+  })
+
+  /** Ход щипка вбок кренит плоскость: то же событие, что у руки, приходит и от эмулятора мыши. */
+  it('tilt turns the board plane and stays inside the limits', () => {
+    const h = board()
+    const before = h.state.camera.tilt ?? 0
+    h.send({ type: 'tilt', e: { hand: 'right', delta: 6 } })
+    expect(h.state.camera.tilt).toBe(before + 6)
+    h.send({ type: 'tilt', e: { hand: 'right', delta: -999 } })
+    expect(h.state.camera.tilt).toBe(0)
   })
 
   it('hints once when zoom hits the limit', () => {

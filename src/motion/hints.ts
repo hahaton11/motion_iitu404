@@ -8,7 +8,6 @@ import {
   CARRY_OPEN_HINT_MS,
   CARRY_FLASH_MS,
   CARRY_NAV_HINT_MS,
-  PINCH_SIDEWAYS_HINT_MS,
   HINT_CLEAR_MS,
   HINT_COOLDOWN_MS,
   HINT_GAP_MS,
@@ -30,20 +29,13 @@ import type { Thresholds, Vec2 } from './types'
  */
 export type CarryHintCode = 'CARRY_PUT_HOW' | 'CARRY_THROW_HOW' | 'CARRY_THROW_SLOW' | 'CARRY_NAV_BUSY'
 
-/**
- * Подсказки жестов доски. Общее у них то, что жест распознан правильно, а доска не двигается:
- * без подсказки это читается как поломка, и человек начинает жестикулировать сильнее.
- */
-export type NavHintCode = 'PINCH_SIDEWAYS'
-
-type HintCode = MotionHintCode | CarryHintCode | NavHintCode
+type HintCode = MotionHintCode | CarryHintCode
 
 export const HINT_TEXTS: Readonly<Record<HintCode, Pick<HintEvt, 'message' | 'severity'>>> = {
   CARRY_PUT_HOW: { message: 'Чтобы положить, сожми кулак и быстро раскрой ладонь', severity: 'info' },
   CARRY_THROW_HOW: { message: 'Чтобы выбросить, сожми кулак и раскрой ладонь на ходу', severity: 'info' },
   CARRY_THROW_SLOW: { message: 'Чтобы выбросить, раскрой ладонь сразу после кулака, не задерживая его', severity: 'warn' },
   CARRY_NAV_BUSY: { message: 'Сначала положи элемент щелчком кулак → ладонь, потом двигай доску', severity: 'info' },
-  PINCH_SIDEWAYS: { message: 'Веди щипок вверх или вниз: в сторону масштаб не меняется', severity: 'info' },
   HALF_GRAB: { message: 'Сожми кулак полностью, чтобы взять', severity: 'warn' },
   HALF_RELEASE: { message: 'Раскрой ладонь шире, чтобы отпустить', severity: 'warn' },
   HALF_PAN: { message: 'Выпрями указательный и средний, остальные согни', severity: 'warn' },
@@ -80,8 +72,6 @@ export interface HintHandInput {
   readonly nearPan?: boolean
   /** Классификатор видит щипок, но неуверенно. */
   readonly nearPinch?: boolean
-  /** Щипок держат и ведут вбок: масштаб от этого не меняется. */
-  readonly pinchSideways?: boolean
   /** Рука несёт элемент и показывает жест доски: панорама и зум при переносе выключены. */
   readonly navLocked?: boolean
   /**
@@ -147,9 +137,6 @@ const PRIORITY: readonly HintCode[] = [
   'CARRY_THROW_HOW',
   'CARRY_NAV_BUSY',
   'CARRY_PUT_HOW',
-  // Ниже подсказок переноса: с элементом в руке важнее сказать про сам перенос, а щипок
-  // вбок в этом случае и так ничего не делает по другой причине.
-  'PINCH_SIDEWAYS',
   'MOVING_TOO_FAST',
   'SWIPE_SHORT',
   'SWIPE_DIAGONAL',
@@ -196,7 +183,6 @@ function handConditions(h: HintHandInput, th: Thresholds, t: number): Condition[
     c('HALF_RELEASE', inBand && releasing(h), HALF_GESTURE_MS),
     c('HALF_PAN', h.nearPan === true, NEAR_PAN_HINT_MS),
     c('HALF_PINCH', h.nearPinch === true, NEAR_PINCH_HINT_MS),
-    c('PINCH_SIDEWAYS', h.pinchSideways === true, PINCH_SIDEWAYS_HINT_MS),
     c('HAND_NEAR_EDGE', nearEdge, GEOMETRY_HINT_MS),
     // Расстояние считается по размеру ладони, а у края кадра часть точек обрезана и размер
     // завышен: там про расстояние сказать нечего, и советовать отойти — это советовать не то.

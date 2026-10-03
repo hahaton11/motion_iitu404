@@ -2,6 +2,14 @@ import type { HandId } from '../contracts/input'
 import { emptyState, type BoardElement, type BoardState, type Camera, type ElementPatch } from './model'
 
 export const HISTORY_LIMIT = 50
+/**
+ * Пределы наклона плоскости. Ноль — плоская доска, вид строго сверху. Выше 45° дальний край
+ * уходит в горизонт так, что дальние элементы схлопываются в несколько пикселей и перестают
+ * быть целью, а попадание по ним становится неразличимым.
+ */
+export const TILT_MIN = 0
+export const TILT_MAX = 45
+
 export const ZOOM_MIN = 0.25
 export const ZOOM_MAX = 4
 
@@ -18,6 +26,7 @@ export type BoardAction =
   | { readonly type: 'dragTo'; readonly x: number; readonly y: number }
   | { readonly type: 'release' }
   | { readonly type: 'pan'; readonly dx: number; readonly dy: number }
+  | { readonly type: 'tilt'; readonly delta: number }
   | { readonly type: 'zoom'; readonly factor: number; readonly ox: number; readonly oy: number }
   | { readonly type: 'setCamera'; readonly camera: Camera }
   | { readonly type: 'undo' }
@@ -75,13 +84,14 @@ function grab(state: BoardState, a: Extract<BoardAction, { type: 'grab' }>): Boa
   return { ...bringToFront(state, a.id), held: { hand: a.hand, id: a.id, dx: a.dx, dy: a.dy } }
 }
 
+/** Камера пересобирается целиком, поэтому наклон переносится явно: иначе зум расплющивал доску. */
 function zoom(state: BoardState, a: Extract<BoardAction, { type: 'zoom' }>): BoardState {
   const cam = state.camera
   const next = clamp(cam.zoom * a.factor, ZOOM_MIN, ZOOM_MAX)
   if (next === cam.zoom) return state
   const wx = a.ox / cam.zoom + cam.x
   const wy = a.oy / cam.zoom + cam.y
-  return { ...state, camera: { x: wx - a.ox / next, y: wy - a.oy / next, zoom: next } }
+  return { ...state, camera: { ...cam, x: wx - a.ox / next, y: wy - a.oy / next, zoom: next } }
 }
 
 function withoutKey<K extends 'held' | 'selectedId'>(state: BoardState, key: K): BoardState {
@@ -117,6 +127,11 @@ export function reduce(state: BoardState, a: BoardAction): BoardState {
     case 'pan': {
       const c = state.camera
       return { ...state, camera: { ...c, x: c.x - a.dx / c.zoom, y: c.y - a.dy / c.zoom } }
+    }
+    case 'tilt': {
+      const c = state.camera
+      const tilt = clamp((c.tilt ?? 0) + a.delta, TILT_MIN, TILT_MAX)
+      return tilt === c.tilt ? state : { ...state, camera: { ...c, tilt } }
     }
     case 'zoom':
       return zoom(state, a)

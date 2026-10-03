@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createElement, emptyState, type BoardElement } from './model'
-import { HISTORY_LIMIT, ZOOM_MAX, ZOOM_MIN, createStore, dispatch, reduce, type BoardStore } from './store'
+import { HISTORY_LIMIT, TILT_MAX, TILT_MIN, ZOOM_MAX, ZOOM_MIN, createStore, dispatch, reduce, type BoardStore } from './store'
 
 const el = (id: string, x = 0, y = 0): BoardElement => createElement({ id, kind: 'rect', x, y })
 const withEls = (...ids: string[]): BoardStore =>
@@ -119,6 +119,25 @@ describe('reduce: camera', () => {
   it('setCamera with a tilt still sets it, so the scene can be flattened on purpose', () => {
     const s = reduce(emptyState(), { type: 'setCamera', camera: { x: 0, y: 0, zoom: 1, tilt: 0 } })
     expect(s.camera.tilt).toBe(0)
+  })
+
+  /** Камера в зуме пересобирается целиком, и наклон однажды уже терялся именно так. */
+  it('zoom keeps the tilt', () => {
+    const start = emptyState()
+    const s = reduce(start, { type: 'zoom', factor: 2, ox: 100, oy: 50 })
+    expect(s.camera.tilt).toBe(start.camera.tilt)
+  })
+
+  it('tilt adds up and is clamped to the limits', () => {
+    const start = emptyState()
+    expect(reduce(start, { type: 'tilt', delta: 5 }).camera.tilt).toBe((start.camera.tilt ?? 0) + 5)
+    expect(reduce(start, { type: 'tilt', delta: 999 }).camera.tilt).toBe(TILT_MAX)
+    expect(reduce(start, { type: 'tilt', delta: -999 }).camera.tilt).toBe(TILT_MIN)
+  })
+
+  it('a tilt that changes nothing returns the same state', () => {
+    const flat = { ...emptyState(), camera: { x: 0, y: 0, zoom: 1, tilt: TILT_MIN } }
+    expect(reduce(flat, { type: 'tilt', delta: -3 })).toBe(flat)
   })
 })
 

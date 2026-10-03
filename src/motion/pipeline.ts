@@ -1,5 +1,5 @@
 import type { HandId, InputEventMap, InputEventType } from '../contracts/input'
-import { EDGE_HINT_MARGIN, LOST_FAST_SPEED } from './constants'
+import { EDGE_HINT_MARGIN, LOST_FAST_SPEED, NEAR_PAN_GRACE_MS } from './constants'
 import { edgeDistance } from './landmarks'
 import { computeFeatures, type HandFeatures } from './features'
 import { speedOf } from '../shared/velocity'
@@ -18,7 +18,8 @@ import {
 import { initialHints, stepHints, type HintHandInput, type HintState } from './hints'
 import { initialSwipe, resetSwipe, stepSwipe, type SwipeOutcome, type SwipeState } from './swipe'
 import { DEFAULT_VOTER, initialVoter, MOVING_SPEED, stepVoter, type VoterState } from '../gestures/voter'
-import type { Pose } from '../gestures/model'
+import type { Pose, RawPose } from '../gestures/model'
+import { initialPan, isPanning, stepPan, type PanState } from './pan'
 import { oneEuro2DStep, oneEuro2DValue, type OneEuro2DState } from './one-euro'
 import { DEFAULT_POINTER, boxToScreen, initialPointer, stepPointer, type PointerBox, type PointerState } from './pointer'
 import { initialTwoHands, stepTwoHands, type HandSnapshot, type TwoHandsState } from './two-hands'
@@ -42,6 +43,10 @@ interface HandTrack {
   readonly voter: VoterState
   /** Что знает потребитель: держит ли рука элемент по отправленным событиям. */
   readonly emittedHolding: boolean
+  /** Панорама жестом двух пальцев. */
+  readonly pan: PanState
+  /** Последний кадр, где классификатор видел «почти два пальца». */
+  readonly nearPanAt: number | undefined
 }
 
 export interface PipelineState {
@@ -74,6 +79,10 @@ export interface HandDebug {
   readonly pose?: Pose
   /** Курсор на паузе: рука в бездействии. */
   readonly paused: boolean
+  /** Рука держит жест двух пальцев и двигает доску, курсор стоит. */
+  readonly panning: boolean
+  /** Классификатор видит два пальца, но неуверенно: для подсказки. */
+  readonly nearPan: boolean
 }
 
 export interface FrameResult {
@@ -91,6 +100,8 @@ const emptyTrack = (): HandTrack => ({
   swipe: initialSwipe(),
   voter: initialVoter(),
   emittedHolding: false,
+  pan: initialPan(),
+  nearPanAt: undefined,
 })
 
 export const initialPipeline = (
@@ -114,6 +125,8 @@ interface HandStep {
   readonly debug: HandDebug | undefined
   readonly lostFast: boolean
   readonly swipe?: SwipeOutcome
+  /** Сдвиг доски жестом двух пальцев в этом кадре, доли экрана. */
+  readonly pan?: Vec2
 }
 
 /** События машины получают координаты видимого курсора, чтобы элемент падал там, где его видно. */
@@ -149,6 +162,30 @@ function hintClosure(raw: NonNullable<HandDetection['pose']>, holding: boolean, 
   return holding ? 1 : 0
 }
 
+/** Поза панорамы: указательный и средний вытянуты, остальные согнуты. */
+const PAN_POSE: Pose = 'victory'
+
+interface PanFrame {
+  readonly pan: PanState
+  readonly delta: Vec2 | undefined
+  readonly nearPanAt: number | undefined
+  readonly nearPan: boolean
+}
+
+/**
+ * Панорама и «почти панорама» по кадру. Двигается сглаженная точка руки, а не курсор: курсор
+ * на время панорамы стоит, иначе мерить было бы нечего. Пока рука держит элемент, два пальца
+ * значат раскрытие кисти, а не панораму.
+ */
+function panFrame(track: HandTrack, raw: RawPose | undefined, pose: Pose | undefined, motion: Vec2, holding: boolean, t: number): PanFrame {
+  const active = pose === PAN_POSE && !holding && !track.emittedHolding
+  const r = stepPan(track.pan, { active, steady: raw?.label === PAN_POSE, p: motion })
+  const near = raw !== undefined && raw.label === PAN_POSE && raw.confidence >= NEAR_MISS_MIN && raw.confidence < DEFAULT_VOTER.threshold
+  const nearPanAt = pose === PAN_POSE || holding ? undefined : near ? t : track.nearPanAt
+  const nearPan = nearPanAt !== undefined && t - nearPanAt <= NEAR_PAN_GRACE_MS
+  return { pan: r.state, delta: r.delta, nearPanAt, nearPan }
+}
+
 function stepSeen(track: HandTrack, det: HandDetection, t: number, th: Thresholds, box: PointerBox): HandStep {
   const features = computeFeatures(det)
   const filter = oneEuro2DStep(track.filter, boxToScreen(features.center, box), t)
@@ -163,8 +200,11 @@ function stepSeen(track: HandTrack, det: HandDetection, t: number, th: Threshold
   const shape = pose ? POSE_SHAPE[pose] : { closure: features.closure, indexOnly: features.indexOnly }
   const r = stepHand(track.machine, { t, x: motion.x, y: motion.y, ...shape }, th)
   const paused = pose === 'idle' && !holding
+  const pf = panFrame(track, det.pose, pose, motion, isHoldingPhase(r.state.phase), t)
+  const panning = isPanning(pf.pan)
   const transitioning = !pose && features.closure > th.open && features.closure < th.hold
-  const p = stepPointer(track.pointer, features.center, t, { holding, transitioning, paused }, { ...DEFAULT_POINTER, box })
+  const pointerCtx = { holding, transitioning, paused: paused || panning }
+  const p = stepPointer(track.pointer, features.center, t, pointerCtx, { ...DEFAULT_POINTER, box })
   const screen = p.screen
   const hintFeatures = det.pose ? { ...features, closure: hintClosure(det.pose, holding, th) } : features
   const debug: HandDebug = {
@@ -175,12 +215,16 @@ function stepSeen(track: HandTrack, det: HandDetection, t: number, th: Threshold
     phase: r.state.phase,
     screen,
     paused,
+    panning,
+    nearPan: pf.nearPan,
     ...(pose ? { pose } : {}),
   }
   const machineEvents = r.events.map((e) => atCursor(e, screen))
-  const sw = stepSwipe(track.swipe, { t, p: motion, holding: isHoldingPhase(r.state.phase) })
-  const next = { ...track, machine: r.state, filter, pointer: p.state, swipe: sw.state, voter }
-  return { track: next, machineEvents, debug, lostFast: false, ...(sw.outcome ? { swipe: sw.outcome } : {}) }
+  // Движение руки с двумя пальцами — панорама, а не взмах.
+  const sw = panning ? { state: resetSwipe(track.swipe), outcome: undefined } : stepSwipe(track.swipe, { t, p: motion, holding: isHoldingPhase(r.state.phase) })
+  const next = { ...track, machine: r.state, filter, pointer: p.state, swipe: sw.state, voter, pan: pf.pan, nearPanAt: pf.nearPanAt }
+  const extra = { ...(sw.outcome ? { swipe: sw.outcome } : {}), ...(pf.delta ? { pan: pf.delta } : {}) }
+  return { track: next, machineEvents, debug, lostFast: false, ...extra }
 }
 
 /** Взмах в событие контракта, неудачный взмах — в подсказку. Во время zoom взмахи не шлются. */
@@ -189,6 +233,12 @@ function swipeEvents(hand: HandId, step: HandStep, suppress: boolean): OutEvent[
   if (!o || suppress) return []
   // Неудачные взмахи подсказками не сообщаются: в режиме курсора быстрые движения руки — норма.
   return o.kind === 'swipe' ? [{ type: 'swipe', e: { hand, dir: o.dir, holding: o.holding } }] : []
+}
+
+/** Сдвиг доски жестом двух пальцев. Во время zoom двумя руками панорама не шлётся. */
+function panEvents(hand: HandId, step: HandStep, suppress: boolean): OutEvent[] {
+  const d = step.pan
+  return d && !suppress ? [{ type: 'pan', e: { hand, dx: d.x, dy: d.y } }] : []
 }
 
 function stepMissing(track: HandTrack, t: number): HandStep {
@@ -264,7 +314,7 @@ function cursorOf(d: HandDebug, track: HandTrack): OutEvent {
     y: d.screen.y,
     closure: d.features.closure,
     holding: track.emittedHolding,
-    ...(d.pose ? { engaged: !d.paused } : {}),
+    ...(d.pose ? { engaged: !d.paused, panning: d.panning } : {}),
   }
   return { type: 'cursor', e }
 }
@@ -283,6 +333,7 @@ function hintInputs(debug: readonly HandDebug[]): HintHandInput[] {
     center: d.geometry.center,
     palmSize: d.geometry.palmSize,
     score: d.detection.score,
+    nearPan: d.nearPan,
   }))
 }
 
@@ -304,6 +355,7 @@ export function processFrame(s: PipelineState, frame: TrackerFrame): FrameResult
     ...emitted.flatMap((x) => x.out),
     ...final.flatMap((x) => x.out),
     ...(tz.zoom ? [{ type: 'zoom', e: tz.zoom } as const] : []),
+    ...HAND_IDS.flatMap((hand, i) => panEvents(hand, steps[i]!, tz.suppress)),
     ...HAND_IDS.flatMap((hand, i) => swipeEvents(hand, steps[i]!, tz.suppress || tz.zoom !== undefined)),
     ...hints.hints.map((e) => ({ type: 'hint', e }) as const),
   ]

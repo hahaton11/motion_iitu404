@@ -3,6 +3,7 @@ import {
   EDGE_HINT_MARGIN,
   GEOMETRY_HINT_MS,
   HALF_GESTURE_MS,
+  NEAR_PAN_HINT_MS,
   HINT_COOLDOWN_MS,
   HINT_GAP_MS,
   NO_HAND_MS,
@@ -20,6 +21,7 @@ import type { Thresholds, Vec2 } from './types'
 export const HINT_TEXTS: Readonly<Record<MotionHintCode, Pick<HintEvt, 'message' | 'severity'>>> = {
   HALF_GRAB: { message: 'Сожми кулак полностью, чтобы взять', severity: 'warn' },
   HALF_RELEASE: { message: 'Раскрой ладонь шире, чтобы отпустить', severity: 'warn' },
+  HALF_PAN: { message: 'Выпрями указательный и средний, остальные согни', severity: 'warn' },
   HAND_NEAR_EDGE: { message: 'Рука у края кадра, веди её ближе к центру', severity: 'info' },
   TOO_FAR: { message: 'Подойди на шаг ближе к камере', severity: 'info' },
   TOO_CLOSE: { message: 'Отойди на шаг назад, рука не помещается в кадр', severity: 'info' },
@@ -38,6 +40,8 @@ export interface HintHandInput {
   readonly center: Vec2
   readonly palmSize: number
   readonly score: number
+  /** Классификатор видит жест двух пальцев, но неуверенно. */
+  readonly nearPan?: boolean
 }
 
 export interface HintInput {
@@ -84,6 +88,7 @@ const PRIORITY: readonly MotionHintCode[] = [
   'TOO_FAR',
   'HALF_RELEASE',
   'HALF_GRAB',
+  'HALF_PAN',
   'MOVING_TOO_FAST',
   'SWIPE_SHORT',
   'SWIPE_DIAGONAL',
@@ -104,6 +109,7 @@ function handConditions(h: HintHandInput, th: Thresholds): Condition[] {
   return [
     c('HALF_GRAB', inBand && !holding, HALF_GESTURE_MS),
     c('HALF_RELEASE', inBand && holding, HALF_GESTURE_MS),
+    c('HALF_PAN', h.nearPan === true, NEAR_PAN_HINT_MS),
     c('HAND_NEAR_EDGE', nearEdge, GEOMETRY_HINT_MS),
     // Расстояние считается по размеру ладони, а у края кадра часть точек обрезана и размер
     // завышен: там про расстояние сказать нечего, и советовать отойти — это советовать не то.

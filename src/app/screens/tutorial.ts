@@ -12,7 +12,7 @@ import {
   type TutorialReaction,
   type TutorialState,
 } from '../tutorial'
-import { addDecor, createWorkspace, ensurePresets, type Workspace } from '../workspace'
+import { addDecor, createWorkspace, ensurePresets, workspaceDeps, type Workspace } from '../workspace'
 import { centerIn } from '../zones'
 
 /** Обучение: четыре шага на настоящей доске с карманом. Карточка шага сверху, шаг пропускается ладонью. */
@@ -70,7 +70,7 @@ function spawnPractice(ws: Workspace, s: TutorialState): void {
 }
 
 export function mountTutorial(ctx: AppContext): ScreenHandle {
-  const ws = createWorkspace({ host: ctx.boardHost, hub: ctx.hub, sound: ctx.sound, hints: ctx.hints }, { prep: false })
+  const ws = createWorkspace(workspaceDeps(ctx), { prep: false })
   void ensurePresets(ws.pocket)
   let state = initialTutorial()
   let removeFrame: (() => void) | undefined

@@ -1,10 +1,12 @@
 import { createBoard, type Board } from '../board'
 import { createPocket, type Pocket } from '../pocket'
-import { createVoice, type Voice } from '../voice'
+import { createVoice, speechSupported, type Voice } from '../voice'
+import type { AppContext } from './context'
 import { FocusInput } from './focus-input'
 import { el, text } from './dom'
 import type { HintToaster } from './hint-view'
 import type { InputHub } from './input-hub'
+import { voiceTip } from './permissions'
 import type { Sound } from './sound'
 import type { WorldRect } from './zones'
 
@@ -26,6 +28,20 @@ export interface WorkspaceDeps {
   readonly hub: InputHub
   readonly sound: Sound
   readonly hints: HintToaster
+  /** Подсказка под стикером: как продиктовать текст или что включить для голоса. */
+  readonly voiceTip?: () => string
+}
+
+/** Зависимости рабочего места из контекста приложения. */
+export function workspaceDeps(ctx: AppContext): WorkspaceDeps {
+  const speech = speechSupported()
+  return {
+    host: ctx.boardHost,
+    hub: ctx.hub,
+    sound: ctx.sound,
+    hints: ctx.hints,
+    voiceTip: () => voiceTip(ctx.micAccess(), ctx.flow().mode, speech),
+  }
 }
 
 /** Рамки привязки каждой доски: к ним прилипает элемент при переносе взмахом. */
@@ -45,7 +61,7 @@ export function createWorkspace(deps: WorkspaceDeps, opts: { readonly prep: bool
   decorRects.set(board, new Set())
   const pocket = createPocket(board.layers.overlay, input, board, { prepToggle: opts.prep })
   focus?.attach({ board, overlay: board.layers.overlay, snapRects: () => [...(decorRects.get(board) ?? [])] })
-  const voice = createVoice(board, input)
+  const voice = createVoice(board, input, deps.voiceTip ? { tip: deps.voiceTip } : {})
   const offs = [
     board.on('hint', (h) => hints.offer(h)),
     board.on('grab', () => {

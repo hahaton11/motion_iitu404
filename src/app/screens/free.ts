@@ -2,14 +2,14 @@ import { PALETTE } from '../../board'
 import type { AppContext, ScreenHandle } from '../context'
 import { el, isolate, text } from '../dom'
 import { exportPng } from '../export'
-import { createWorkspace, ensurePresets } from '../workspace'
+import { createWorkspace, ensurePresets, workspaceDeps } from '../workspace'
 
 /** Свободная доска: без таймера, весь функционал, режим подготовки кармана справа сверху. */
 
 const NEW_STICKER_OFFSET = 36
 
 export function mountFree(ctx: AppContext): ScreenHandle {
-  const ws = createWorkspace({ host: ctx.boardHost, hub: ctx.hub, sound: ctx.sound, hints: ctx.hints }, { prep: true })
+  const ws = createWorkspace(workspaceDeps(ctx), { prep: true })
   void ensurePresets(ws.pocket)
   let added = 0
   const status = el('span', 'app-free-status')

@@ -24,7 +24,7 @@ import type { AppContext, ScreenHandle } from '../context'
 import { el, isolate, text } from '../dom'
 import type { ExportZone } from '../export'
 import { totalHints } from '../hint-layer'
-import { addDecor, createWorkspace, ensurePresets, type Decor, type Workspace } from '../workspace'
+import { addDecor, createWorkspace, ensurePresets, workspaceDeps, type Decor, type Workspace } from '../workspace'
 
 /** Челлендж «Разбери брейншторм»: таймер сверху, зоны в мировом слое, проверка раскладки по разметке. */
 
@@ -88,7 +88,7 @@ function hud(ctx: AppContext, ws: Workspace, onDone: () => void): Hud {
 }
 
 export function mountChallenge(ctx: AppContext): ScreenHandle {
-  const ws = createWorkspace({ host: ctx.boardHost, hub: ctx.hub, sound: ctx.sound, hints: ctx.hints }, { prep: false })
+  const ws = createWorkspace(workspaceDeps(ctx), { prep: false })
   void ensurePresets(ws.pocket)
   fitCamera(ws)
   const removeDecor = addDecor(ws.board, CHALLENGE_DECOR)

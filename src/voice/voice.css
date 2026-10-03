@@ -106,3 +106,45 @@
     transform: scale(0.8);
   }
 }
+
+/* Подсказка под стикером: как начать диктовку */
+.vc-tip {
+  --vc-x: 0px;
+  --vc-y: 0px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 340px;
+  width: max-content;
+  padding: 7px 14px 7px 10px;
+  border-radius: 999px;
+  background: rgba(6, 9, 15, 0.9);
+  box-shadow: 0 0 0 1px var(--mb-accent-soft, rgba(90, 209, 255, 0.22));
+  color: var(--mb-fg);
+  font-family: var(--mb-font);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate3d(calc(var(--vc-x) - 50%), var(--vc-y), 0);
+  transition: opacity 140ms ease-out;
+}
+
+.vc-tip.is-on {
+  opacity: 1;
+}
+
+.vc-tip-icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  fill: none;
+  stroke: var(--mb-accent, #5ad1ff);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

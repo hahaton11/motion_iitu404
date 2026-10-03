@@ -2,6 +2,7 @@ import type { Board } from '../board'
 import type { HintEvt, InputSource, PointEvt } from '../contracts/input'
 import { TypedEmitter, type Unsubscribe } from '../pocket/emitter'
 import { VoiceIndicator } from './indicator'
+import { VoiceTip } from './tip'
 import { speechSupported, startSpeech, type SpeechErrorCode, type SpeechSession } from './speech'
 import { collect, POINT_GUARD_MS, STOP_TIMEOUT_MS, stickyText, stopAt, type Transcript } from './transcript'
 
@@ -31,6 +32,14 @@ const ERROR_HINTS: Readonly<Record<SpeechErrorCode, HintEvt | undefined>> = {
   network: VOICE_HINTS.NETWORK,
   audio: VOICE_HINTS.AUDIO,
   other: undefined,
+}
+
+/** Подсказка по умолчанию: диктовка начинается тем же жестом, что выделяет стикер. */
+export const DEFAULT_VOICE_TIP = 'Укажи пальцем на стикер и задержи — потом говори текст'
+
+export interface VoiceOptions {
+  /** Текст подсказки под наведённым или выделенным стикером: зависит от режима ввода и микрофона. */
+  readonly tip?: () => string
 }
 
 export interface VoiceEventMap {
@@ -76,11 +85,17 @@ export class VoiceController implements Voice {
   private rec: Recording | undefined
   private timer: ReturnType<typeof setTimeout> | undefined
   private readonly indicator: VoiceIndicator
+  private readonly tip: VoiceTip
   private readonly events = new TypedEmitter<VoiceEventMap>()
   private readonly disposers: Unsubscribe[] = []
 
-  constructor(private readonly board: Board, input?: InputSource) {
+  constructor(private readonly board: Board, input?: InputSource, opts: VoiceOptions = {}) {
     this.indicator = new VoiceIndicator(board)
+    this.tip = new VoiceTip(board, input, opts.tip ?? (() => DEFAULT_VOICE_TIP))
+    this.disposers.push(
+      this.events.on('start', ({ id }) => this.tip.setRecording(id)),
+      this.events.on('end', () => this.tip.setRecording(undefined)),
+    )
     this.disposers.push(
       board.on('select', ({ id }) => this.onSelect(id)),
       board.on('remove', ({ element }) => element.id === this.rec?.id && this.cancel()),
@@ -142,6 +157,7 @@ export class VoiceController implements Voice {
     this.cancel()
     this.disposers.splice(0).forEach((d) => d())
     this.indicator.destroy()
+    this.tip.destroy()
     this.events.clear()
   }
 

@@ -18,7 +18,7 @@ export function demoImage(i: number): string {
 }
 
 export const DEMO_IDEAS: readonly string[] = [
-  'Жест «щипок» для выделения',
+  'Щипок и вверх-вниз — масштаб',
   'Карман внизу экрана',
   'Голосом диктовать стикеры',
   'Бросок удаляет элемент',

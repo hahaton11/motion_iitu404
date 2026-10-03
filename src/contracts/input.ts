@@ -19,6 +19,11 @@ export interface CursorEvt {
    * бездействия, например мышь, поле не заполняют.
    */
   readonly engaged?: boolean
+  /**
+   * true — рука держит жест панорамы (указательный и средний вытянуты), доска двигается событиями `pan`,
+   * а курсор стоит на месте. Источники без панорамы поле не заполняют.
+   */
+  readonly panning?: boolean
 }
 
 export interface GrabEvt {
@@ -53,6 +58,16 @@ export interface ZoomEvt {
   readonly cy: number
 }
 
+/**
+ * Панорама доски жестом двух пальцев: сдвиг руки с прошлого события в долях экрана, уже зеркально.
+ * Приходит, пока рука держит жест и двигается. Доска сдвигается вслед за рукой.
+ */
+export interface PanEvt {
+  readonly hand: HandId
+  readonly dx: number
+  readonly dy: number
+}
+
 export type SwipeDir = 'left' | 'right' | 'up' | 'down'
 
 /** Короткий взмах рукой. Направление на экране, уже зеркально. Приходит после завершения движения. */
@@ -78,6 +93,7 @@ export type MotionHintCode =
   | 'POOR_TRACKING'
   | 'SWIPE_SHORT'
   | 'SWIPE_DIAGONAL'
+  | 'HALF_PAN'
 
 /** Подсказка режима «ошибка». message — конкретное действие для исправления, на русском. */
 export interface HintEvt {
@@ -94,6 +110,7 @@ export interface InputEventMap {
   throw: ThrowEvt
   point: PointEvt
   zoom: ZoomEvt
+  pan: PanEvt
   swipe: SwipeEvt
   handlost: HandLostEvt
   hint: HintEvt

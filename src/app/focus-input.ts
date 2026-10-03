@@ -52,7 +52,7 @@ export const FOCUS_HINTS = {
   POCKET_EMPTY: { code: 'NAV_POCKET_EMPTY', message: 'Задержи руку, карман откроется, потом листай взмахами вбок', severity: 'info' },
 } as const satisfies Record<string, HintEvt>
 
-const PASS: readonly InputEventType[] = ['zoom', 'handlost', 'hint']
+const PASS: readonly InputEventType[] = ['zoom', 'pan', 'handlost', 'hint']
 
 export class FocusInput implements InputSource {
   private readonly em = new InputEmitter()

@@ -9,7 +9,7 @@ import { InputEmitter } from '../shared/emitter'
  * Источник можно сменить на лету, например камеру на мышь после отказа.
  */
 
-const TYPES: readonly InputEventType[] = ['cursor', 'grab', 'release', 'throw', 'point', 'zoom', 'swipe', 'handlost', 'hint']
+const TYPES: readonly InputEventType[] = ['cursor', 'grab', 'release', 'throw', 'point', 'zoom', 'pan', 'swipe', 'handlost', 'hint']
 
 /** Прокси-источник: запуском и остановкой настоящего источника управляет хаб. */
 function proxy(em: InputEmitter): InputSource {

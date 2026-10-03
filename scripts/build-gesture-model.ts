@@ -11,7 +11,13 @@ import type { Landmarks } from '../src/motion/types'
 const sources = process.argv.slice(2)
 const out = process.env.OUT ?? 'public/models/gestures-knn.json'
 if (sources.length === 0) throw new Error('usage: tsx scripts/build-gesture-model.ts data/a.json [data/b.json ...]')
-const data = { samples: sources.flatMap((src) => (JSON.parse(readFileSync(src, 'utf8')) as Dataset).samples) }
+/** Исключить классы одной записи: data/gestures-v1.json#-pinch,thumb — у этой записи плохая разметка щипка. */
+function loadSource(arg: string): Dataset['samples'] {
+  const [file = '', drop = ''] = arg.split('#-')
+  const skip = new Set(drop.split(',').filter(Boolean))
+  return (JSON.parse(readFileSync(file, 'utf8')) as Dataset).samples.filter((s) => !skip.has(s.label))
+}
+const data = { samples: sources.flatMap(loadSource) }
 const toLm = (pts: readonly (readonly number[])[]): Landmarks => pts.map(([x = 0, y = 0, z = 0]) => ({ x, y, z }))
 const round3 = (v: number): number => Math.round(v * 1e3) / 1e3
 const label = (l: string): string => (l === 'none' || l === 'relaxed' ? 'idle' : l)

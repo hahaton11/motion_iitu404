@@ -36,6 +36,22 @@ const plainFetch: FetchBytes = async (url) => {
   return new Uint8Array(await res.arrayBuffer())
 }
 
+/**
+ * Расстояние между кончиками большого и указательного, отнесённое к длине ладони 0→9. По записям:
+ * настоящий щипок почти всегда уже 0.64 (95-й перцентиль), раскрытая ладонь почти всегда шире 0.71 (5-й).
+ */
+export const PINCH_MAX_TIP_GAP = 0.7
+
+export function tipGap(world: Landmarks): number {
+  const d = (i: number, j: number): number => {
+    const a = world[i]
+    const b = world[j]
+    return a && b ? Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) : 0
+  }
+  const palm = d(0, 9)
+  return palm > 0 ? d(4, 8) / palm : Infinity
+}
+
 const POSES: ReadonlySet<string> = new Set<Pose>(['idle', 'open', 'fist', 'pinch', 'point', 'victory'])
 const toPose = (label: string, absorb: ReadonlySet<string>): Pose =>
   absorb.has(label) || !POSES.has(label) ? 'idle' : (label as Pose)
@@ -57,6 +73,9 @@ export class GestureClassifier {
 
   classify(world: Landmarks, handLabel: string): RawPose {
     const p = predictKnn(this.model, handFeatures(world, handLabel))
-    return { label: toPose(p.label, this.absorb), confidence: p.confidence }
+    const label = toPose(p.label, this.absorb)
+    // Страховка от ложного зума: щипок без сомкнутых кончиков — это раскрытая или расслабленная рука.
+    if (label === 'pinch' && tipGap(world) >= PINCH_MAX_TIP_GAP) return { label: 'idle', confidence: p.confidence }
+    return { label, confidence: p.confidence }
   }
 }

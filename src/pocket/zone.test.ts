@@ -6,12 +6,13 @@ import {
   HOVER_MIN_MS,
   NEAR_MS,
   OPEN_DWELL_MS,
-  STUCK_MS,
+  STASH_DWELL_MS,
   hintAllowed,
   inPocket,
   initialZone,
   nearPocket,
   pickCard,
+  stashProgress,
   stepZone,
   type HandZone,
   type ZoneEvent,
@@ -121,20 +122,40 @@ describe('carry hints', () => {
     expect(types(r.events)).toEqual(['hint:NEAR'])
   })
 
-  it('entering the pocket cancels the near hint', () => {
+  it('entering the pocket cancels the near hint and stashes instead', () => {
     const r = run([cur(0.5, 0.83, 0, { carrying: true }), cur(0.5, 0.95, 100, { carrying: true }), { type: 'tick', t: 5000 }])
+    expect(types(r.events)).toEqual(['stash'])
+  })
+})
+
+describe('stash by dwell', () => {
+  it('stashes the carried element after STASH_DWELL_MS over the pocket, in any hand pose', () => {
+    const over = { carrying: true, closure: 0.6 }
+    const r = run([cur(0.5, 0.95, 0, over), cur(0.5, 0.95, STASH_DWELL_MS - 1, over), { type: 'tick', t: STASH_DWELL_MS }])
+    expect(types(r.events)).toEqual(['stash'])
+  })
+
+  it('stashes only once', () => {
+    const r = run([cur(0.5, 0.95, 0, { carrying: true }), { type: 'tick', t: STASH_DWELL_MS }, { type: 'tick', t: STASH_DWELL_MS * 3 }])
+    expect(types(r.events)).toEqual(['stash'])
+  })
+
+  it('passing over the pocket faster than the dwell does nothing', () => {
+    const c = { carrying: true }
+    const r = run([cur(0.3, 0.95, 0, c), cur(0.5, 0.95, 100, c), cur(0.7, 0.7, 200, c), { type: 'tick', t: 2000 }])
     expect(r.events).toEqual([])
   })
 
-  it('hints to open fingers when closure is stuck in the middle over the pocket', () => {
-    const stuck = { carrying: true, closure: 0.6 }
-    const r = run([cur(0.5, 0.95, 0, stuck), cur(0.5, 0.95, STUCK_MS, stuck)])
-    expect(types(r.events)).toEqual(['hint:STUCK'])
+  it('an empty hand over the pocket stashes nothing', () => {
+    const r = run([cur(0.5, 0.95, 0), { type: 'tick', t: 2000 }])
+    expect(types(r.events)).not.toContain('stash')
   })
 
-  it('full fist over the pocket is not stuck', () => {
-    const r = run([cur(0.5, 0.95, 0, { carrying: true, closure: 1 }), { type: 'tick', t: 5000 }])
-    expect(r.events).toEqual([])
+  it('reports the dwell progress for the pocket fill', () => {
+    const z = run([cur(0.5, 0.95, 0, { carrying: true })]).zone
+    expect(stashProgress(z, 0)).toBe(0)
+    expect(stashProgress(z, STASH_DWELL_MS / 2)).toBeCloseTo(0.5)
+    expect(stashProgress(initialZone(), 100)).toBe(0)
   })
 })
 

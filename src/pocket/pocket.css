@@ -91,6 +91,24 @@
   text-overflow: ellipsis;
 }
 
+/* Заливка кармана, пока элемент в руке держат над ним: полная — элемент ложится в карман */
+.pk-stash {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--mb-accent-soft);
+  transform-origin: 0 50%;
+  transform: scaleX(var(--pk-stash, 0));
+  opacity: 0;
+  pointer-events: none;
+  /* Под текстом кармана: transform у .pk-front держит заливку внутри его слоя. */
+  z-index: -1;
+}
+
+.pk-front.is-armed .pk-stash {
+  opacity: 1;
+}
+
 /* Полоска ожидания открытия: заполняется за OPEN_DWELL_MS */
 .pk-dwell {
   position: absolute;

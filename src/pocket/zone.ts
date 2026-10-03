@@ -15,10 +15,11 @@ export const CLOSE_GRACE_MS = 350
 /** Полоса над карманом, где элемент «почти у кармана», в долях экрана. */
 export const NEAR_BAND = 0.1
 export const NEAR_MS = 700
-/** Кулак застрял между «сжат» и «раскрыт». */
-export const STUCK_MIN = 0.45
-export const STUCK_MAX = 0.75
-export const STUCK_MS = 600
+/**
+ * Элемент в руке держится над карманом столько — и ложится в карман сам, без жеста отпускания.
+ * Короче — рука пронесла его мимо. Полоска на кармане заполняется за это же время.
+ */
+export const STASH_DWELL_MS = 300
 /** Выше этого closure рука считается сжатой и веер не открывает. */
 export const FIST_CLOSURE = 0.6
 /** Листание: раскрытая рука, быстрый горизонтальный мах. */
@@ -37,11 +38,6 @@ export const POCKET_HINTS = {
     code: 'POCKET_HOVER_SHORT',
     message: 'Задержи руку над карманом, чтобы он открылся',
     severity: 'info',
-  },
-  STUCK: {
-    code: 'POCKET_STUCK',
-    message: 'Разожми пальцы над карманом, чтобы положить элемент',
-    severity: 'warn',
   },
 } as const satisfies Record<string, HintEvt>
 
@@ -62,9 +58,9 @@ export interface HandZone {
   /** Рука покинула область открытого веера. */
   readonly outsideAt?: number
   readonly nearAt?: number
-  readonly stuckAt?: number
+  /** Рука с элементом над карманом с этого момента. */
+  readonly stashAt?: number
   readonly nearHinted: boolean
-  readonly stuckHinted: boolean
   readonly swipe: readonly Sample[]
   readonly swipeAt: number
 }
@@ -86,6 +82,8 @@ export type ZoneEvent =
   | { readonly type: 'open' }
   | { readonly type: 'close' }
   | { readonly type: 'scroll'; readonly delta: number }
+  /** Элемент в руке продержался над карманом STASH_DWELL_MS: положить его в карман. */
+  | { readonly type: 'stash' }
   | { readonly type: 'hint'; readonly key: PocketHintKey }
 
 /** fanTop — верх области веера в долях экрана. */
@@ -102,7 +100,6 @@ export const initialZone = (): HandZone => ({
   phase: 'idle',
   since: 0,
   nearHinted: false,
-  stuckHinted: false,
   swipe: [],
   swipeAt: -Infinity,
 })
@@ -111,26 +108,27 @@ export const inPocket = (y: number): boolean => y >= 1 - POCKET_HEIGHT
 
 export const nearPocket = (y: number): boolean => !inPocket(y) && y >= 1 - POCKET_HEIGHT - NEAR_BAND
 
-const isStuck = (closure: number): boolean => closure >= STUCK_MIN && closure <= STUCK_MAX
-
 const done = (zone: HandZone, events: readonly ZoneEvent[] = []): ZoneResult => ({ zone, events })
 
 /** Карточка веера под прицелом, x и y в долях экрана. */
 export const pickCard = (slots: readonly FanSlot[], x: number, y: number, vp: Viewport): number | undefined =>
   fanHit(slots, x * vp.w, y * vp.h)
 
+/** Доля задержки над карманом, которую рука с элементом уже выдержала, 0..1. */
+export const stashProgress = (z: HandZone, t: number): number =>
+  z.stashAt === undefined ? 0 : Math.min(1, Math.max(0, (t - z.stashAt) / STASH_DWELL_MS))
+
 function trackCarry(z: HandZone, e: ZoneCursor): HandZone {
   const near = nearPocket(e.y)
-  const stuck = inPocket(e.y) && isStuck(e.closure)
-  const { nearAt: _n, stuckAt: _s, outsideAt: _o, ...rest } = z
+  const over = inPocket(e.y)
+  const { nearAt: _n, stashAt: _s, outsideAt: _o, ...rest } = z
   return {
     ...rest,
     phase: 'idle',
     swipe: [],
     nearHinted: near && z.nearHinted,
-    stuckHinted: stuck && z.stuckHinted,
     ...(near ? { nearAt: z.nearAt ?? e.t } : {}),
-    ...(stuck ? { stuckAt: z.stuckAt ?? e.t } : {}),
+    ...(over ? { stashAt: z.stashAt ?? e.t } : {}),
   }
 }
 
@@ -161,7 +159,7 @@ function trackEmpty(z: HandZone, e: ZoneCursor, ctx: ZoneContext): ZoneResult {
   return detectSwipe(next, e)
 }
 
-/** Проверка таймеров: открытие, закрытие, подсказки удержания у кармана. */
+/** Проверка таймеров: открытие, закрытие, подсказка у кармана, элемент в карман по задержке. */
 function advance(z: HandZone, t: number): ZoneResult {
   if (z.phase === 'hover' && t - z.since >= OPEN_DWELL_MS) return done({ ...z, phase: 'open' }, [{ type: 'open' }])
   if (z.phase === 'open' && z.outsideAt !== undefined && t - z.outsideAt >= CLOSE_GRACE_MS) {
@@ -171,8 +169,9 @@ function advance(z: HandZone, t: number): ZoneResult {
   if (z.nearAt !== undefined && !z.nearHinted && t - z.nearAt >= NEAR_MS) {
     return done({ ...z, nearHinted: true }, [{ type: 'hint', key: 'NEAR' }])
   }
-  if (z.stuckAt !== undefined && !z.stuckHinted && t - z.stuckAt >= STUCK_MS) {
-    return done({ ...z, stuckHinted: true }, [{ type: 'hint', key: 'STUCK' }])
+  if (z.stashAt !== undefined && t - z.stashAt >= STASH_DWELL_MS) {
+    const { stashAt: _s, ...rest } = z
+    return done(rest, [{ type: 'stash' }])
   }
   return done(z)
 }

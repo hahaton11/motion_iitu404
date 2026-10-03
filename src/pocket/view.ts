@@ -15,8 +15,10 @@ export interface PocketViewModel {
   readonly open: boolean
   /** Индексы карточек под прицелами. */
   readonly hot: ReadonlySet<number>
-  /** Рука с элементом над карманом: отпусти — и он внутри. */
+  /** Рука с элементом над карманом: задержи — и он внутри. */
   readonly armed: boolean
+  /** Сколько задержки над карманом уже выдержано, 0..1: полоска заполнения. */
+  readonly stash: number
   /** Рука с элементом у края кармана. */
   readonly near: boolean
   /** Пустая рука ждёт открытия. */
@@ -30,7 +32,7 @@ const div = (className: string, text = ''): HTMLElement =>
   Object.assign(document.createElement('div'), { className, textContent: text })
 
 function labelFor(m: PocketViewModel): string {
-  if (m.armed) return 'Отпусти — и элемент в кармане'
+  if (m.armed) return 'Держи над карманом — элемент ляжет сам'
   if (m.open) return m.count ? 'Сожми кулак над карточкой, чтобы достать' : 'Карман пуст, положи сюда элемент'
   if (m.near) return 'Ниже, к карману'
   return 'Задержи руку, чтобы открыть'
@@ -63,7 +65,7 @@ export class PocketView {
     this.label = div('pk-label')
     this.badge = div('pk-badge', '0')
     const title = div('pk-title', 'Карман')
-    this.front.append(div('pk-dwell'), title, this.badge, this.label)
+    this.front.append(div('pk-stash'), div('pk-dwell'), title, this.badge, this.label)
     frontHost.append(this.fan, this.front)
   }
 
@@ -80,6 +82,7 @@ export class PocketView {
     }
     this.front.style.setProperty('--pk-h', `${m.viewport.h * POCKET_HEIGHT}px`)
     this.back.style.setProperty('--pk-h', `${m.viewport.h * POCKET_HEIGHT}px`)
+    this.front.style.setProperty('--pk-stash', m.armed ? m.stash.toFixed(3) : '0')
     this.label.textContent = labelFor(m)
     this.badge.textContent = String(m.count)
     this.renderCards(m)

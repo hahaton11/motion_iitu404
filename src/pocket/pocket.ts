@@ -26,6 +26,7 @@ import {
   nearPocket,
   pickCard,
   POCKET_HINTS,
+  stashProgress,
   stepZone,
   type HandZone,
   type ZoneEvent,
@@ -182,7 +183,7 @@ export class PocketController implements Pocket {
     const input = { type: 'cursor', x: e.x, y: e.y, closure: e.closure, carrying, fist: e.holding || e.panning === true || e.zooming === true, t: performance.now() } as const
     const r = this.prep ? { zone: initialZone(), events: [] } : stepZone(prev, input, { fanTop })
     this.hands.set(e.hand, { zone: r.zone, x: e.x, y: e.y, carrying })
-    this.handleEvents(r.events)
+    this.handleEvents(r.events, e.hand)
     const over = !this.prep && carrying && inPocket(e.y)
     if (carrying) this.applyHeldScale(over ? HELD_SCALE_OVER : 1)
     this.render()
@@ -193,17 +194,26 @@ export class PocketController implements Pocket {
     const h = this.hands.get(hand)
     if (!h) return
     this.hands.delete(hand)
-    this.handleEvents(stepZone(h.zone, { type: 'lost' }, { fanTop: 0 }).events)
+    this.handleEvents(stepZone(h.zone, { type: 'lost' }, { fanTop: 0 }).events, hand)
     this.render()
   }
 
-  private handleEvents(events: readonly ZoneEvent[]): void {
+  private handleEvents(events: readonly ZoneEvent[], hand: HandId): void {
     events.forEach((ev) => {
       if (ev.type === 'open') this.events.emit('open', undefined)
       if (ev.type === 'close' && !this.isOpen()) this.events.emit('close', undefined)
       if (ev.type === 'scroll') this.commit(scrollBy(this.state, ev.delta), false)
       if (ev.type === 'hint') this.hint(ev.key)
+      if (ev.type === 'stash') this.stash(hand)
     })
+  }
+
+  /** Элемент продержали над карманом: он ложится туда сам, без жеста отпускания. */
+  private stash(hand: HandId): void {
+    const held = this.board.getHeld()
+    const h = this.hands.get(hand)
+    if (this.prep || !held || held.hand !== hand || !h) return
+    this.putAway(held.element, h.x)
   }
 
   private hint(key: keyof typeof POCKET_HINTS): void {
@@ -217,22 +227,24 @@ export class PocketController implements Pocket {
   /** Таймеры зоны тикают, пока хоть одна рука чего-то ждёт: камера шлёт кадры, мышь — нет. */
   private ensureTicking(): void {
     if (this.frame) return
+    const stashing = () => [...this.hands.values()].some((h) => h.zone.stashAt !== undefined)
     const waiting = () =>
-      [...this.hands.values()].some((h) => h.zone.phase !== 'idle' || h.zone.nearAt !== undefined || h.zone.stuckAt !== undefined)
+      stashing() || [...this.hands.values()].some((h) => h.zone.phase !== 'idle' || h.zone.nearAt !== undefined)
     if (!waiting()) return
     const loop = () => {
       const t = performance.now()
       const fanTop = fanRegionTop(this.slots(), viewport())
       const next = new Map<HandId, HandInfo>()
-      const events: ZoneEvent[] = []
+      const events: (readonly [HandId, ZoneEvent])[] = []
       this.hands.forEach((h, hand) => {
         const r = stepZone(h.zone, { type: 'tick', t }, { fanTop })
         next.set(hand, { ...h, zone: r.zone })
-        events.push(...r.events)
+        events.push(...r.events.map((ev) => [hand, ev] as const))
       })
       this.hands = next
-      this.handleEvents(events)
-      if (events.length) this.render()
+      events.forEach(([hand, ev]) => this.handleEvents([ev], hand))
+      // Полоска задержки над карманом заполняется по кадрам, даже когда мышь стоит.
+      if (events.length || stashing()) this.render()
       this.frame = waiting() ? requestAnimationFrame(loop) : 0
     }
     this.frame = requestAnimationFrame(loop)
@@ -273,15 +285,20 @@ export class PocketController implements Pocket {
     if (wasOpen && !this.isOpen()) this.events.emit('close', undefined)
   }
 
+  /** Щелчок кулак → ладонь над карманом кладёт в карман сразу, не дожидаясь задержки. */
   private onRelease(e: ReleaseInfo): boolean {
     if (this.prep || !inPocket(e.y)) return false
-    const item = stashElement(e.element, this.newId(), Date.now())
+    this.putAway(e.element, e.x)
+    return true
+  }
+
+  private putAway(element: BoardElement, x: number): void {
+    const item = stashElement(element, this.newId(), Date.now())
     this.applyHeldScale(1)
-    this.board.removeElement(e.element.id, { animate: { x: e.x, y: 1 - POCKET_HEIGHT / 2 } })
+    this.board.removeElement(element.id, { animate: { x, y: 1 - POCKET_HEIGHT / 2 } })
     this.commit(addItem(this.state, item))
     this.view.gulp()
-    this.events.emit('put', { item, element: e.element })
-    return true
+    this.events.emit('put', { item, element })
   }
 
   private applyHeldScale(scale: number): void {
@@ -296,6 +313,8 @@ export class PocketController implements Pocket {
     const hands = [...this.hands.entries()]
     const hot = new Set(hands.map(([hand]) => this.hotIndex(hand)).filter((i): i is number => i !== undefined))
     const carriers = hands.filter(([, h]) => h.carrying)
+    const now = performance.now()
+    const stash = Math.max(0, ...carriers.map(([, h]) => stashProgress(h.zone, now)))
     this.view.render({
       items,
       slots: fanLayout(items.length, vp),
@@ -303,6 +322,7 @@ export class PocketController implements Pocket {
       open: !this.prep && this.isOpen(),
       hot,
       armed: !this.prep && carriers.some(([, h]) => inPocket(h.y)),
+      stash: this.prep ? 0 : stash,
       near: !this.prep && carriers.some(([, h]) => nearPocket(h.y)),
       dwell: !this.prep && hands.some(([, h]) => h.zone.phase === 'hover'),
       count: this.state.items.length,

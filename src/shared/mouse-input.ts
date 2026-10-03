@@ -109,6 +109,11 @@ export class MouseInput implements InputSource {
     const { x, y } = this.norm(e)
     this.vel = this.vel.push(x, y, e.timeStamp)
     this.movedAt = e.timeStamp
+    // Отпускание кнопки может не дойти: окно теряет фокус посреди перетаскивания, браузер
+    // съедает событие, система забирает жест себе. Для панорамы и зума это тупик — курсор
+    // остаётся стоять на месте, и всё остальное перестаёт работать. Кнопка в движении
+    // не нажата — жест закончился, чем бы ни было потеряно отпускание.
+    if ((this.pinch || this.panFrom) && e.buttons === 0) this.endDrag(x, y)
     if (this.pinch) {
       this.movePinch(y)
       return
@@ -168,19 +173,18 @@ export class MouseInput implements InputSource {
     this.em.emit('grab', { hand: 'right', x, y })
   }
 
+  /** Панорама или зум закончились: курсор снова ходит за рукой с той точки, где она сейчас. */
+  private endDrag(x: number, y: number): void {
+    this.pinch = undefined
+    this.panFrom = undefined
+    this.emitCursor(x, y)
+  }
+
   private onUp(e: PointerEvent): void {
     clearTimeout(this.pointTimer)
-    if (this.pinch) {
-      this.pinch = undefined
+    if (this.pinch || this.panFrom) {
       const { x, y } = this.norm(e)
-      this.emitCursor(x, y)
-      return
-    }
-    if (this.panFrom) {
-      this.panFrom = undefined
-      const { x, y } = this.norm(e)
-      this.emitCursor(x, y)
-      return
+      return this.endDrag(x, y)
     }
     const { x, y } = this.norm(e)
     const clickAt = this.clickAt

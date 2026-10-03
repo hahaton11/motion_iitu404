@@ -1,9 +1,9 @@
 import { expect, test, type Page } from '@playwright/test'
 import { CLUSTERS, IDEAS, TRASH_TITLE, ideaElementId, type IdeaTarget } from '../src/app/challenge'
 import { TUTORIAL_STEPS } from '../src/app/tutorial'
-import { centerOf, click, drag, fling, glide, pointAt, putInPocket, takeFromPocket, type Point } from './gestures'
+import { centerOf, click, drag, fling, glide, panBoard, pointAt, putInPocket, takeFromPocket, zoomBoard, type Point } from './gestures'
 
-/** Смоук на MouseInput: старт → обучение из пяти шагов → челлендж → финал. */
+/** Смоук на MouseInput: старт → обучение из семи шагов → челлендж → финал. */
 
 /**
  * Названия берутся из кода, а не выписываются здесь второй раз: выписанная копия расходится
@@ -51,14 +51,26 @@ async function passTutorial(page: Page): Promise<void> {
   await fling(page, await centerOf(practice(spawnTextOf('throw'))))
   await expect(progress).toHaveText(stepLabel(3))
 
-  const taken = await takeFromPocket(page)
-  await expect(progress).toHaveText(stepLabel(4))
+  // Панорама: метка висит справа, её надо довезти до середины. Размах берётся от её
+  // собственного положения на экране, а не числом: при другом размере окна число врёт.
+  const markAt = await centerOf(page.locator('.app-zone'))
   const vp = page.viewportSize()
+  const centerX = (vp?.width ?? 0) / 2
+  await panBoard(page, { x: centerX + 280, y: (vp?.height ?? 0) / 2 }, { x: centerX + 280 - (markAt.x - centerX), y: (vp?.height ?? 0) / 2 })
+  await expect(progress).toHaveText(stepLabel(4), { timeout: 5_000 })
+
+  // Зум: Alt и ход вверх. Коэффициент эмулятора 2.5 на долю высоты окна, 240 px при 800
+  // дают около 2.1 — с запасом над порогом шага 1.6.
+  await zoomBoard(page, { x: centerX, y: (vp?.height ?? 0) * 0.6 }, -240)
+  await expect(progress).toHaveText(stepLabel(5), { timeout: 5_000 })
+
+  const taken = await takeFromPocket(page)
+  await expect(progress).toHaveText(stepLabel(6))
   const mid = { x: taken.x, y: (vp?.height ?? 0) * 0.55 }
   await glide(page, taken, mid)
   await putInPocket(page, mid)
 
-  await expect(progress).toHaveText(stepLabel(5))
+  await expect(progress).toHaveText(stepLabel(7))
   const sticky = practice(spawnTextOf('voice'))
   await expect(sticky).toBeVisible()
   await page.waitForTimeout(SPAWN_MS)

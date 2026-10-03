@@ -55,3 +55,37 @@ test('mouse: Alt-drag up zooms in, down zooms out, over an element nothing is ta
   await page.mouse.wheel(0, -300)
   await expect.poll(async () => (await camera(page)).zoom).toBeGreaterThan(start.zoom)
 })
+
+/*
+ * Отпускание кнопки может не дойти до страницы: окно теряет фокус посреди перетаскивания,
+ * система забирает жест себе, браузер съедает событие. Нашлось на эмуляторе — Chrome
+ * не доставил pointerup, пришедший с зажатым Alt, — и кончилось тем, что курсор стоял лупой
+ * навсегда: доска работала, а рука к ней больше не относилась, и демо выглядело мёртвым.
+ *
+ * Саму потерю приёмами Playwright воспроизвести не удаётся: мышь он держит в согласованном
+ * состоянии. Поэтому события подаются прямо в окно — так проверяется само правило «движение
+ * с ненажатой кнопкой заканчивает жест», а не то, при каких условиях браузер теряет отпускание.
+ */
+test('mouse: a drag whose release never arrived ends on the first move without a button', async ({ page }) => {
+  await page.goto('./board.html')
+  await expect(page.locator('.mb-el').first()).toBeVisible()
+  const send = (type: string, x: number, y: number, buttons: number, alt = false) =>
+    page.evaluate(
+      (e) =>
+        window.dispatchEvent(
+          new PointerEvent(e.type, { clientX: e.x, clientY: e.y, buttons: e.buttons, altKey: e.alt, button: 0, bubbles: true }),
+        ),
+      { type, x, y, buttons, alt },
+    )
+
+  await send('pointermove', 640, 400, 0)
+  await send('pointerdown', 640, 400, 1, true)
+  await send('pointermove', 640, 340, 1, true)
+  await expect(page.locator('.mb-cursor.is-zoom')).toBeVisible()
+
+  // Отпускания нет вовсе: следующее движение приходит с ненажатой кнопкой.
+  await send('pointermove', 500, 500, 0)
+  await expect(page.locator('.mb-cursor.is-zoom')).toHaveCount(0)
+  const at = await page.locator('.mb-cursor').first().evaluate((el) => (el as HTMLElement).style.transform)
+  expect(at).toContain('500px')
+})

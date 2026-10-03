@@ -88,6 +88,34 @@ export async function fling(page: Page, from: Point): Promise<void> {
   await click(page)
 }
 
+/**
+ * Панорама: у MouseInput это перетаскивание средней кнопкой, у руки — два пальца. Шаги мелкие,
+ * как у плавного переноса: эмулятор шлёт сдвиг на каждое движение, и доска едет вслед за ними.
+ */
+export async function panBoard(page: Page, from: Point, to: Point): Promise<void> {
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down({ button: 'middle' })
+  await glide(page, from, to)
+  await page.mouse.up({ button: 'middle' })
+  await wait(SETTLE_MS)
+}
+
+/**
+ * Зум щипком: у MouseInput это Alt с перетаскиванием по вертикали, у руки — сомкнутый щипок
+ * и ход вверх или вниз. dy в пикселях: вверх (отрицательный) приближает.
+ */
+export async function zoomBoard(page: Page, at: Point, dy: number): Promise<void> {
+  await page.mouse.move(at.x, at.y)
+  await page.keyboard.down('Alt')
+  await page.mouse.down()
+  await glide(page, at, { x: at.x, y: at.y + dy })
+  // Alt отпускается раньше кнопки: pointerup с зажатым Alt Chrome до страницы не доставляет,
+  // и жест для приложения не кончается. У руки такого порядка нет — это особенность эмулятора.
+  await page.keyboard.up('Alt')
+  await page.mouse.up()
+  await wait(SETTLE_MS)
+}
+
 /** Задержать открытую ладонь над карманом, пока веер не раскроется. */
 export async function openPocket(page: Page): Promise<void> {
   const vp = page.viewportSize()

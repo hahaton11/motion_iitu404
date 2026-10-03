@@ -43,9 +43,19 @@ export class HintToaster {
   }
 
   offer(hint: HintEvt): void {
+    // Условие подсказки ушло: человек исправился, и тост пора убрать, не досиживая его время.
+    // Само снятие не подсказка — его не показывают и не считают в разборе ошибок на финале.
+    if (hint.cleared) return this.clear(hint.code)
     const r = offerHint(this.state, hint, performance.now())
     this.state = r.state
     if (r.show) this.show(r.show)
+  }
+
+  /** Убрать с экрана подсказку с этим кодом, если сейчас висит именно она. */
+  private clear(code: string): void {
+    if (this.state.current?.hint.code !== code) return
+    this.state = dismissHint(this.state)
+    this.hide()
   }
 
   /** Правильное действие убирает подсказку. */

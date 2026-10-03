@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { HintEvt } from '../contracts/input'
-import { HINT_GAP_MS } from './constants'
+import { HINT_CLEAR_MS, HINT_GAP_MS } from './constants'
 import { DEFAULT_THRESHOLDS } from './hand-state'
 import { HINT_TEXTS, initialHints, stepHints, type HintHandInput, type HintInput } from './hints'
 
@@ -222,5 +222,50 @@ describe('stepHints', () => {
 
   it('has an action text for every code', () => {
     Object.values(HINT_TEXTS).forEach((h) => expect(h.message.length).toBeGreaterThan(10))
+  })
+})
+
+/*
+ * Подсказка должна уходить, когда ушло то, что её вызвало: «отойди на шаг назад» висела ещё
+ * две секунды после того, как человек уже отошёл, и читалась как «я всё ещё делаю не так».
+ */
+describe('stepHints: снятие подсказки по исчезнувшему условию', () => {
+  /** Сначала условие держится, потом пропадает. Возвращает всё, что ушло наружу. */
+  const fixAfter = (bad: Partial<HintHandInput>, badMs: number, goodMs: number) => {
+    let state = initialHints()
+    const out: Array<HintEvt & { t: number }> = []
+    for (let t = 0; t <= badMs + goodMs; t += FRAME_MS) {
+      const hands = [t <= badMs ? hand(bad) : hand()]
+      const r = stepHints(state, { t, hands, lostFast: [], thresholds: DEFAULT_THRESHOLDS })
+      state = r.state
+      out.push(...r.hints.map((h) => ({ ...h, t })))
+    }
+    return out
+  }
+
+  it('TOO_CLOSE снимается вскоре после того, как человек отошёл', () => {
+    const out = fixAfter({ palmSize: 0.5 }, 1000, 1000)
+    const shown = out.find((h) => h.code === 'TOO_CLOSE' && !h.cleared)
+    const cleared = out.find((h) => h.code === 'TOO_CLOSE' && h.cleared)
+    expect(shown).toBeDefined()
+    expect(cleared).toBeDefined()
+    expect(cleared!.t - 1000).toBeLessThanOrEqual(HINT_CLEAR_MS + FRAME_MS * 2)
+    expect(cleared!.message).toBe('')
+  })
+
+  it('снятие приходит один раз, а не каждый кадр', () => {
+    const cleared = fixAfter({ palmSize: 0.5 }, 1000, 3000).filter((h) => h.cleared)
+    expect(cleared).toHaveLength(1)
+  })
+
+  it('пока условие держится, снятия нет', () => {
+    expect(fixAfter({ palmSize: 0.5 }, 3000, 0).filter((h) => h.cleared)).toEqual([])
+  })
+
+  /** У разового события нечему перестать выполняться: его подсказка живёт по таймеру. */
+  it('разовая подсказка о броске не снимается', () => {
+    const swung = hand({ phase: 'carrying', carry: { carrying: true, swingAt: 0, slowThrowAt: undefined } })
+    const out = runFor({ hands: [swung] }, 3000)
+    expect(out.filter((h) => h.cleared)).toEqual([])
   })
 })

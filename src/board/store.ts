@@ -120,8 +120,16 @@ export function reduce(state: BoardState, a: BoardAction): BoardState {
     }
     case 'zoom':
       return zoom(state, a)
+    /*
+     * Наклон — свойство сцены, а не того, куда смотрит камера, поэтому он переживает установку
+     * камеры: вызов без `tilt` его сохраняет, а не роняет в ноль. Так челлендж и кнопка «к центру»
+     * расплющивали доску, и объём оставался только там, где камеру никто не трогал.
+     */
     case 'setCamera':
-      return { ...state, camera: { ...a.camera, zoom: clamp(a.camera.zoom, ZOOM_MIN, ZOOM_MAX) } }
+      return {
+        ...state,
+        camera: { tilt: state.camera.tilt, ...a.camera, zoom: clamp(a.camera.zoom, ZOOM_MIN, ZOOM_MAX) },
+      }
     case 'undo':
     case 'redo':
       return state

@@ -9,6 +9,7 @@ import {
   CARRY_FLASH_MS,
   CARRY_NAV_HINT_MS,
   PINCH_SIDEWAYS_HINT_MS,
+  HINT_CLEAR_MS,
   HINT_COOLDOWN_MS,
   HINT_GAP_MS,
   NO_HAND_MS,
@@ -108,6 +109,11 @@ export interface HintState {
   readonly lastHandAt: number | undefined
   /** Когда отправлялась любая подсказка: следующая не раньше чем через HINT_GAP_MS. */
   readonly lastAnyAt: number | undefined
+  /**
+   * Отправленные подсказки, которые ещё не сняты: код → последний кадр, где их условие
+   * выполнялось. Когда условие отсутствует дольше HINT_CLEAR_MS, по коду уходит снятие.
+   */
+  readonly live: Readonly<Record<string, number>>
 }
 
 interface Condition {
@@ -154,7 +160,7 @@ const rankOf = (c: HintCode): number => {
   return i < 0 ? PRIORITY.length : i
 }
 
-export const initialHints = (): HintState => ({ lastSent: {}, since: {}, lastHandAt: undefined, lastAnyAt: undefined })
+export const initialHints = (): HintState => ({ lastSent: {}, since: {}, lastHandAt: undefined, lastAnyAt: undefined, live: {} })
 
 const recent = (at: number | undefined, t: number): boolean => at !== undefined && t - at <= CARRY_FLASH_MS
 
@@ -211,11 +217,29 @@ const keyOf = (c: Condition): string => `${c.code}:${c.hand ?? '*'}`
 
 const toHint = (c: Condition): HintEvt => ({ code: c.code, ...HINT_TEXTS[c.code], ...(c.hand ? { hand: c.hand } : {}) })
 
+/**
+ * Снятие подсказок, чьи условия ушли. Исправился — тост уходит сразу, а не досиживает своё время:
+ * иначе «отойди на шаг назад» висит ещё две секунды после того, как человек уже отошёл.
+ *
+ * Снимаются только длящиеся условия. У разового события — мах без кулака, потеря руки на скорости —
+ * нечему перестать выполняться, и его подсказка живёт по таймеру, как раньше.
+ */
+function clearGone(live: Record<string, number>, t: number): HintEvt[] {
+  const gone: HintEvt[] = []
+  for (const [code, lastActive] of Object.entries(live)) {
+    if (t - lastActive < HINT_CLEAR_MS) continue
+    delete live[code]
+    gone.push({ code, message: '', severity: 'info', cleared: true })
+  }
+  return gone
+}
+
 export function stepHints(s: HintState, input: HintInput): { state: HintState; hints: HintEvt[] } {
   const { t } = input
   const lastHandAt = input.hands.length > 0 ? t : (s.lastHandAt ?? t)
   const since: Record<string, number> = {}
   const lastSent: Record<string, number> = { ...s.lastSent }
+  const live: Record<string, number> = { ...s.live }
   // Отсчёт ведётся по всем активным условиям, даже если отправлено будет одно: иначе таймер
   // проигравшего условия сбрасывается каждый кадр и оно не созревает никогда.
   const ready: Condition[] = []
@@ -224,13 +248,16 @@ export function stepHints(s: HintState, input: HintInput): { state: HintState; h
     const key = keyOf(c)
     const start = s.since[key] ?? (c.code === 'NO_HAND' ? lastHandAt : t)
     since[key] = start
+    if (live[c.code] !== undefined) live[c.code] = t
     const cooled = t - (lastSent[c.code] ?? -Infinity) >= HINT_COOLDOWN_MS
     if (t - start >= c.holdMs && cooled) ready.push(c)
   }
+  const hints = clearGone(live, t)
   const winner = ready.reduce<Condition | undefined>((best, c) => (!best || rankOf(c.code) < rankOf(best.code) ? c : best), undefined)
   const gapPassed = t - (s.lastAnyAt ?? -Infinity) >= HINT_GAP_MS
-  if (!winner || !gapPassed) return { state: { lastSent, since, lastHandAt, lastAnyAt: s.lastAnyAt }, hints: [] }
+  if (!winner || !gapPassed) return { state: { lastSent, since, lastHandAt, lastAnyAt: s.lastAnyAt, live }, hints }
   lastSent[winner.code] = t
   since[keyOf(winner)] = t
-  return { state: { lastSent, since, lastHandAt, lastAnyAt: t }, hints: [toHint(winner)] }
+  if (winner.holdMs > 0) live[winner.code] = t
+  return { state: { lastSent, since, lastHandAt, lastAnyAt: t, live }, hints: [...hints, toHint(winner)] }
 }

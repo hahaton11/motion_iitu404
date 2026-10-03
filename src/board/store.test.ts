@@ -102,6 +102,24 @@ describe('reduce: camera', () => {
     expect(big.camera.zoom).toBe(ZOOM_MAX)
     expect(small.camera.zoom).toBe(ZOOM_MIN)
   })
+
+  /*
+   * Наклон — свойство сцены, а не взгляда камеры. Челлендж ставил камеру по размеру окна
+   * и ронял наклон в ноль: доска там была плоской, а объём оставался только на экранах,
+   * где камеру никто не трогал.
+   */
+  it('setCamera without a tilt keeps the one the scene already had', () => {
+    const start = emptyState()
+    expect(start.camera.tilt).toBeGreaterThan(0)
+    const s = reduce(start, { type: 'setCamera', camera: { x: 0, y: 0, zoom: 1.4 } })
+    expect(s.camera.tilt).toBe(start.camera.tilt)
+    expect(s.camera.zoom).toBe(1.4)
+  })
+
+  it('setCamera with a tilt still sets it, so the scene can be flattened on purpose', () => {
+    const s = reduce(emptyState(), { type: 'setCamera', camera: { x: 0, y: 0, zoom: 1, tilt: 0 } })
+    expect(s.camera.tilt).toBe(0)
+  })
 })
 
 describe('history', () => {

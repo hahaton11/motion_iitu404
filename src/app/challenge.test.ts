@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { BOARD_TILT_DEG, worldToScreen } from '../board/geometry'
 import {
   CHECKS_TOTAL,
   CLUSTERS,
@@ -8,6 +9,8 @@ import {
   IDEAS,
   ideaElementId,
   inTrash,
+  LAYOUT_H,
+  LAYOUT_W,
   nearMissCluster,
   progress,
   scoreOf,
@@ -54,9 +57,38 @@ describe('challenge data', () => {
     })
   })
 
-  it('fitZoom keeps the layout inside the screen', () => {
-    expect(fitZoom(1480, 920)).toBe(1)
-    expect(fitZoom(1280, 720)).toBeCloseTo(720 / 920)
+  /*
+   * Проверяется свойство, а не число: раскладка должна оказаться внутри экрана при той самой
+   * проекции, которой доска рисуется. Сверка с числом означала бы «доска плоская» — а она
+   * наклонена, и ближний её край крупнее дальнего, отчего нижний ряд стикеров и вылезал за край.
+   */
+  it('fitZoom keeps every corner of the layout on screen, tilt included', () => {
+    const corners = [
+      { x: -LAYOUT_W / 2, y: -LAYOUT_H / 2 },
+      { x: LAYOUT_W / 2, y: -LAYOUT_H / 2 },
+      { x: -LAYOUT_W / 2, y: LAYOUT_H / 2 },
+      { x: LAYOUT_W / 2, y: LAYOUT_H / 2 },
+    ]
+    for (const [w, h] of [
+      [1280, 800],
+      [1480, 920],
+      [1920, 1080],
+      [1366, 768],
+    ] as const) {
+      const cam = { x: 0, y: 0, zoom: fitZoom(w, h), tilt: BOARD_TILT_DEG }
+      corners.forEach((c) => {
+        const p = worldToScreen(cam, { w, h }, c)
+        expect(p.x).toBeGreaterThanOrEqual(0)
+        expect(p.x).toBeLessThanOrEqual(w)
+        expect(p.y).toBeGreaterThanOrEqual(0)
+        expect(p.y).toBeLessThanOrEqual(h)
+      })
+    }
+  })
+
+  /** Наклон увеличивает ближний край, поэтому вписанный зум обязан быть меньше плоского. */
+  it('fitZoom is smaller with the tilt than without it', () => {
+    expect(fitZoom(1280, 800)).toBeLessThan(fitZoom(1280, 800, 0))
   })
 })
 

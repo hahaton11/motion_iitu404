@@ -1,3 +1,7 @@
+// Напрямую из геометрии, а не из индекса доски: индекс тянет за собой тему в CSS, а этот
+// модуль — чистая логика, его читают и unit-тесты, и смоук, запускаемые без сборщика.
+import { BOARD_TILT_DEG, worldToScreen } from '../board/geometry'
+import type { Camera } from '../board/model'
 import type { HintEvt } from '../contracts/input'
 import { centerIn, rect, touchesEdge, type Placed, type WorldRect } from './zones'
 
@@ -121,8 +125,45 @@ export function seedLayout(): readonly SeedSpec[] {
   }))
 }
 
-/** Зум камеры, при котором раскладка целиком помещается в экран. */
-export const fitZoom = (vw: number, vh: number): number => Math.min(vw / LAYOUT_W, vh / LAYOUT_H)
+/** Отступ от края экрана, чтобы крайние стикеры не упирались в рамку окна. */
+const FIT_MARGIN_PX = 12
+/** Сколько шагов деления отрезка: 24 дают точность лучше тысячной доли зума. */
+const FIT_STEPS = 24
+
+/**
+ * Зум камеры, при котором раскладка целиком помещается в экран.
+ *
+ * Считается по настоящей проекции, а не по отношению сторон: плоскость доски наклонена,
+ * и ближний край у неё крупнее дальнего. Пока наклон терялся при установке камеры, разницы
+ * не было; как только челлендж стал наклонённым, нижний ряд стикеров вылез за край экрана.
+ *
+ * Деление отрезка, а не формула: вписывание зависит от зума нелинейно — перспективное деление
+ * само зависит от того, как далеко край уехал, а он зависит от зума.
+ */
+export function fitZoom(vw: number, vh: number, tilt: number = BOARD_TILT_DEG): number {
+  const vp = { w: vw, h: vh }
+  const corners: readonly Placed[] = [
+    { x: -LAYOUT_W / 2, y: -LAYOUT_H / 2, w: 0, h: 0 },
+    { x: LAYOUT_W / 2, y: -LAYOUT_H / 2, w: 0, h: 0 },
+    { x: -LAYOUT_W / 2, y: LAYOUT_H / 2, w: 0, h: 0 },
+    { x: LAYOUT_W / 2, y: LAYOUT_H / 2, w: 0, h: 0 },
+  ]
+  const fits = (zoom: number): boolean => {
+    const cam: Camera = { x: 0, y: 0, zoom, tilt }
+    return corners.every((c) => {
+      const p = worldToScreen(cam, vp, c)
+      return p.x >= FIT_MARGIN_PX && p.x <= vw - FIT_MARGIN_PX && p.y >= FIT_MARGIN_PX && p.y <= vh - FIT_MARGIN_PX
+    })
+  }
+  let lo = 0.05
+  let hi = 4
+  for (let i = 0; i < FIT_STEPS; i++) {
+    const mid = (lo + hi) / 2
+    if (fits(mid)) lo = mid
+    else hi = mid
+  }
+  return lo
+}
 
 export const clusterOf = (el: Placed): Cluster | undefined => CLUSTERS.find((c) => centerIn(c.rect, el))
 

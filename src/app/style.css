@@ -363,6 +363,52 @@ body[data-mode='mouse'] .app-screen.is-calibration {
   background: rgba(63, 224, 176, 0.12);
 }
 
+/* Разрешения: камера и микрофон */
+.app-perms {
+  margin: 8px 0;
+}
+
+.app-perm-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.app-perm {
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--mb-muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.app-perm[hidden] {
+  display: none;
+}
+
+.app-perm[data-mark='ok'] {
+  color: #3fe0b0;
+  background: rgba(63, 224, 176, 0.12);
+}
+
+.app-perm[data-mark='off'] {
+  color: var(--mb-danger);
+  background: rgba(255, 138, 122, 0.12);
+}
+
+.app-perm-advice {
+  max-width: 520px;
+  margin: 8px auto 0;
+  color: var(--mb-danger);
+  font-size: 14px;
+}
+
+.app-perm-advice:empty {
+  display: none;
+}
+
 .app-icon {
   width: 26px;
   height: 26px;

@@ -2,6 +2,7 @@ import type { MotionHintCode } from '../../contracts/input'
 import type { AppContext, ScreenHandle } from '../context'
 import { el, icon, isolate, text } from '../dom'
 import { loadBar } from '../load-bar'
+import { permissionsView } from '../permissions-view'
 
 /** Камера: доступ, индикатор «Вижу руку», подсказки о расстоянии и свете, выход в режим мыши. */
 
@@ -10,7 +11,7 @@ const SEEN_MS = 600
 const POLL_MS = 250
 /** Столько ждём ответа на запрос доступа, прежде чем подсказать, где его разрешить. */
 const PROMPT_HINT_MS = 7000
-const PROMPT_HINT = 'Разреши доступ к камере во всплывающем окне браузера или выбери режим мыши'
+const PROMPT_HINT = 'Разреши камеру и микрофон во всплывающем окне браузера или выбери режим мыши'
 const INLINE_CODES: readonly MotionHintCode[] = ['TOO_FAR', 'TOO_CLOSE', 'POOR_TRACKING', 'HAND_NEAR_EDGE']
 
 const PHASE_TITLE = {
@@ -40,7 +41,8 @@ export function mountCamera(ctx: AppContext): ScreenHandle {
     },
   })
   const load = loadBar()
-  const card = el('div', 'app-card app-camera', title, load.node, status, seen, tip, el('div', 'app-row', next, mouse))
+  const perms = permissionsView(ctx)
+  const card = el('div', 'app-card app-camera', title, load.node, status, perms.node, seen, tip, el('div', 'app-row', next, mouse))
   const screen = el('section', 'app-screen is-full is-camera', isolate(card))
   ctx.layer.append(screen)
 
@@ -72,6 +74,7 @@ export function mountCamera(ctx: AppContext): ScreenHandle {
     destroy: () => {
       clearInterval(timer)
       offs.forEach((off) => off())
+      perms.destroy()
       screen.remove()
     },
   }

@@ -2,6 +2,7 @@ import type { AppContext, CameraStatus, ScreenHandle } from '../context'
 import { el, isolate, text } from '../dom'
 import type { InputMode } from '../flow'
 import { loadBar } from '../load-bar'
+import { permissionsView } from '../permissions-view'
 
 /** Старт: название, одна фраза, крупная кнопка «Начать» и переключатель «Камера / Мышь». */
 
@@ -52,6 +53,7 @@ export function mountStart(ctx: AppContext): ScreenHandle {
   })
   const free = ctx.buttons.create({ label: 'Свободная доска', variant: 'ghost', onPress: () => ctx.send({ type: 'free' }) })
   const load = loadBar()
+  const perms = permissionsView(ctx)
   const sync = () => {
     const mode = ctx.flow().mode
     const cam = ctx.cameraStatus()
@@ -71,6 +73,7 @@ export function mountStart(ctx: AppContext): ScreenHandle {
     text('p', 'app-caption', 'Нажми или задержи открытую ладонь на кнопке одну секунду'),
     status,
     load.node,
+    perms.node,
     el('div', 'app-row', switcher.node, free),
   )
   const screen = el('section', 'app-screen is-full', isolate(card))
@@ -80,6 +83,7 @@ export function mountStart(ctx: AppContext): ScreenHandle {
   return {
     destroy: () => {
       off()
+      perms.destroy()
       screen.remove()
     },
   }

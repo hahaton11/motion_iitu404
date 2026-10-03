@@ -1,5 +1,6 @@
 import type { BoardState } from '../board'
 import type { CameraInput, LoadProgress } from '../motion'
+import type { MicAccess } from '../shared/microphone'
 import type { Evaluation } from './challenge'
 import type { ExportZone } from './export'
 import type { FlowEvent, FlowState } from './flow'
@@ -48,6 +49,9 @@ export interface AppContext {
   cameraStatus(): CameraStatus
   onCameraStatus(fn: (s: CameraStatus) => void): () => void
   startCamera(): void
+  /** Ответ про микрофон: спрашивается на старте вместе с камерой или отдельно в режиме мыши. */
+  micAccess(): MicAccess
+  onMicAccess(fn: (s: MicAccess) => void): () => void
   /** Переключить источник на мышь, не меняя экран. */
   switchToMouse(): void
   lastResult(): ChallengeResult | undefined

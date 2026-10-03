@@ -1,4 +1,5 @@
 import { CameraInput } from '../motion'
+import { requestMicrophone, type MicAccess } from '../shared/microphone'
 import { MouseInput } from '../shared/mouse-input'
 import { AppCursor } from './app-cursor'
 import type { AppContext, CameraStatus, ChallengeResult, ScreenHandle, ScreenMount } from './context'
@@ -47,6 +48,8 @@ export class App {
   private screen: ScreenHandle | undefined
   private cam: CameraInput | undefined
   private camStatus: CameraStatus = { phase: 'off' }
+  private mic: MicAccess = 'unknown'
+  private readonly micListeners = new Set<(s: MicAccess) => void>()
   private result: ChallengeResult | undefined
   private readonly camListeners = new Set<(s: CameraStatus) => void>()
   private readonly hub = new InputHub()
@@ -96,6 +99,11 @@ export class App {
         return () => this.camListeners.delete(fn)
       },
       startCamera: () => this.startCamera(),
+      micAccess: () => this.mic,
+      onMicAccess: (fn) => {
+        this.micListeners.add(fn)
+        return () => this.micListeners.delete(fn)
+      },
       switchToMouse: () => this.switchToMouse(),
       lastResult: () => this.result,
       setLastResult: (r) => (this.result = r),
@@ -126,10 +134,21 @@ export class App {
     this.camListeners.forEach((fn) => fn(s))
   }
 
+  private setMic(s: MicAccess): void {
+    if (s === this.mic) return
+    this.mic = s
+    document.body.dataset.mic = s
+    this.micListeners.forEach((fn) => fn(s))
+  }
+
   private startCamera(): void {
     if (this.cam && this.camStatus.phase !== 'failed') return
+    const withMic = this.mic === 'unknown'
+    if (withMic) this.setMic('asking')
     const cam = new CameraInput({
       video: this.video,
+      withMic,
+      onMicAccess: (access) => this.setMic(access),
       onLoadProgress: (progress) => this.cam === cam && this.camStatus.phase === 'loading' && this.setCamStatus({ phase: 'loading', progress }),
     })
     this.cam = cam
@@ -139,6 +158,11 @@ export class App {
       .start()
       .then(() => this.cam === cam && this.setCamStatus({ phase: 'ready' }))
       .catch((err: unknown) => {
+        // Камера не открылась, и ответа про микрофон нет: спросим его отдельно, голос пригодится и с мышью.
+        if (withMic && this.mic === 'asking') {
+          this.setMic('unknown')
+          this.askMicAlone()
+        }
         if (this.cam !== cam) return
         const message = err instanceof Error ? err.message : 'Обнови страницу или включи режим мыши'
         this.setCamStatus({ phase: 'failed', message })
@@ -152,6 +176,14 @@ export class App {
     this.hub.use(mouse)
     void mouse.start()
     this.setCamStatus({ phase: 'off' })
+    this.askMicAlone()
+  }
+
+  /** Без камеры микрофон спрашивается отдельным окном, как только выбрана мышь. */
+  private askMicAlone(): void {
+    if (this.mic !== 'unknown') return
+    this.setMic('asking')
+    void requestMicrophone().then((access) => this.setMic(access))
   }
 
   private buildCorner(buttons: GestureButtons): void {

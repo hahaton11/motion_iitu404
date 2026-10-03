@@ -13,7 +13,7 @@ export const ASSET_KEYS: readonly AssetKey[] = ['wasm', 'model', 'gestures']
 export const ASSET_BYTES: Readonly<Record<AssetKey, number>> = {
   wasm: 11_756_954,
   model: 7_819_105,
-  gestures: 1_328_633,
+  gestures: 4_119_861,
 }
 
 /** Насколько должна вырасти доля, чтобы сообщить наверх: иначе перерисовка на каждый кусок потока. */

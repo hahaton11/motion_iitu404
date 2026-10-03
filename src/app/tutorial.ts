@@ -9,7 +9,7 @@ import { rect, type WorldPoint, type WorldRect } from './zones'
 export type TutorialStepId = 'move' | 'throw' | 'take' | 'put'
 
 /** Иконка жеста для карточки шага и подсказки. */
-export type GestureIcon = 'fist' | 'palm' | 'throw' | 'point' | 'pocket' | 'voice' | 'hand' | 'light'
+export type GestureIcon = 'fist' | 'palm' | 'throw' | 'point' | 'victory' | 'pocket' | 'voice' | 'hand' | 'light'
 
 export interface TutorialStep {
   readonly id: TutorialStepId

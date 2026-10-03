@@ -10,6 +10,7 @@ export interface HintInfo {
 const INFO: Readonly<Record<string, HintInfo>> = {
   HALF_GRAB: { label: 'Кулак сжат не до конца', advice: 'Сжимай кулак полностью, прижимая все пальцы к ладони', icon: 'fist' },
   HALF_RELEASE: { label: 'Ладонь раскрыта не до конца', advice: 'Раскрывай ладонь широко, разводя пальцы', icon: 'palm' },
+  HALF_PAN: { label: 'Два пальца показаны нечётко', advice: 'Для панорамы выпрями указательный и средний, остальные прижми', icon: 'victory' },
   HAND_NEAR_EDGE: { label: 'Рука у края кадра', advice: 'Держи руку ближе к центру кадра, на уровне груди', icon: 'hand' },
   TOO_FAR: { label: 'Слишком далеко от камеры', advice: 'Встань на шаг ближе, чтобы ладонь была крупнее в кадре', icon: 'hand' },
   TOO_CLOSE: { label: 'Слишком близко к камере', advice: 'Отойди на шаг назад, чтобы рука целиком помещалась в кадр', icon: 'hand' },
@@ -18,6 +19,7 @@ const INFO: Readonly<Record<string, HintInfo>> = {
   NO_HAND: { label: 'Рука пропадала из кадра', advice: 'Держи руку перед камерой ладонью к экрану всё время игры', icon: 'hand' },
   BOARD_RELEASE_EDGE: { label: 'Отпускание за краем доски', advice: 'Отпускай элементы над доской, не доводя руку до края экрана', icon: 'palm' },
   BOARD_TOOLBAR_POINT: { label: 'Кулак на кнопке плашки', advice: 'Кнопки плашки выбираются указательным пальцем с задержкой', icon: 'point' },
+  BOARD_GRIP_PAN: { label: 'Доску тянули кулаком', advice: 'Доска двигается жестом двух пальцев: указательный и средний вытянуты', icon: 'victory' },
   BOARD_ZOOM_MAX: { label: 'Упор в максимальный зум', advice: 'Сводя руки, ты отдаляешь доску, разводя — приближаешь', icon: 'fist' },
   BOARD_ZOOM_MIN: { label: 'Упор в минимальный зум', advice: 'Сводя руки, ты отдаляешь доску, разводя — приближаешь', icon: 'fist' },
   POCKET_NEAR: { label: 'Элемент не донесён до кармана', advice: 'Опускай элемент до самой полосы кармана внизу экрана', icon: 'pocket' },

@@ -13,8 +13,23 @@ export interface Point {
 const SLOW_STEP_PX = 14
 const SLOW_STEP_MS = 16
 const SETTLE_MS = 160
-const THROW_STEPS = 6
-const THROW_STEP_MS = 8
+/**
+ * Бросок: мало крупных шагов вместо многих мелких. Каждый page.mouse.move — обращение
+ * к браузеру, и его собственная задержка соизмерима с паузой между шагами, поэтому
+ * скорость задаётся расстоянием, а не темпом. Замеры при пороге THROW_SPEED 2.2:
+ * шесть шагов по 8 мс на 420 px дают 2,31, три шага по 16 мс на 360 px — 2,02.
+ *
+ * Обе цифры на грани, и на загруженной машине тест снова начал падать: собственная задержка
+ * обращения к браузеру растёт, а размах остаётся прежним. Своя пауза убрана совсем, шагов два —
+ * тогда всё время движения это round-trip, и быстрее эмулятор сделать нельзя. Размах по-прежнему
+ * во всю ширину экрана.
+ */
+const THROW_STEPS = 2
+const THROW_STEP_MS = 0
+/** Отступ от края: дальше курсор не уедет, браузер прижмёт его к окну и размах срежется. */
+const THROW_EDGE_PX = 40
+/** Меньший размах не разгоняет курсор до порога броска ни при каком темпе. */
+const THROW_MIN_PX = 420
 const POCKET_HOVER_MS = 700
 const FAN_SETTLE_MS = 600
 
@@ -45,8 +60,17 @@ export async function drag(page: Page, from: Point, to: Point): Promise<void> {
   await page.mouse.up()
 }
 
-/** Взять и резко махнуть в сторону, отпуская на ходу. */
-export async function fling(page: Page, from: Point, dx: number): Promise<void> {
+/**
+ * Взять и резко махнуть в сторону, отпуская на ходу. Сторона выбирается сама — та, где
+ * до края больше места: бросок удаляет элемент независимо от направления.
+ */
+export async function fling(page: Page, from: Point): Promise<void> {
+  const vp = page.viewportSize()
+  if (!vp) throw new Error('no viewport')
+  const toRight = vp.width - THROW_EDGE_PX - from.x
+  const toLeft = THROW_EDGE_PX - from.x
+  const dx = toRight >= -toLeft ? toRight : toLeft
+  if (Math.abs(dx) < THROW_MIN_PX) throw new Error(`no room to fling from x=${Math.round(from.x)}`)
   await page.mouse.move(from.x, from.y)
   await page.mouse.down()
   await wait(SETTLE_MS)

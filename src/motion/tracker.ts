@@ -8,6 +8,7 @@ import {
   WASM_PATH,
 } from './constants'
 import type { RawHand } from './landmarks'
+import type { Bytes, LoadMeter } from './loading'
 
 /** HandLandmarker в режиме VIDEO: модель и wasm из public/, GPU с откатом на CPU. */
 
@@ -18,6 +19,12 @@ export interface TrackerOptions {
   readonly modelPath?: string
   /** Папка с wasm относительно страницы. */
   readonly wasmPath?: string
+  /** Счётчик загрузки: считает байты модели кисти и прогревает кэш wasm. */
+  readonly meter?: LoadMeter
+  /** Принудительный делегат вместо «GPU с откатом на CPU». Для замеров производительности. */
+  readonly delegate?: Delegate
+  /** Сколько рук искать. Две нужны для зума, но каждая рука стоит времени на кадре. */
+  readonly numHands?: number
 }
 
 export class TrackerLoadError extends Error {
@@ -29,16 +36,51 @@ export class TrackerLoadError extends Error {
 
 const resolveUrl = (path: string): string => new URL(path, document.baseURI).href
 
-async function createLandmarker(wasmUrl: string, modelUrl: string, delegate: Delegate): Promise<HandLandmarker> {
-  const fileset = await FilesetResolver.forVisionTasks(wasmUrl)
+/** Тип обязателен: без него instantiateStreaming не берёт blob и откатывается на медленный путь. */
+const WASM_MIME = 'application/wasm'
+
+type Fileset = Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>>
+type ModelSource = { readonly modelAssetBuffer: Uint8Array } | { readonly modelAssetPath: string }
+
+async function createLandmarker(
+  fileset: Fileset,
+  source: ModelSource,
+  delegate: Delegate,
+  numHands = NUM_HANDS,
+): Promise<HandLandmarker> {
   return HandLandmarker.createFromOptions(fileset, {
-    baseOptions: { modelAssetPath: modelUrl, delegate },
+    baseOptions: { ...source, delegate },
     runningMode: 'VIDEO',
-    numHands: NUM_HANDS,
+    numHands,
     minHandDetectionConfidence: MIN_DETECTION_CONFIDENCE,
     minHandPresenceConfidence: MIN_PRESENCE_CONFIDENCE,
     minTrackingConfidence: MIN_TRACKING_CONFIDENCE,
   })
+}
+
+interface Prepared {
+  /** Набор файлов MediaPipe: wasm подменён на уже скачанные байты. */
+  readonly fileset: Fileset
+  readonly model: Bytes | undefined
+  readonly release: () => void
+}
+
+/**
+ * Оба больших файла скачиваются своим кодом — иначе их байты не посчитать, а до первого кадра
+ * их около 20 МБ. Модель кисти уходит дальше буфером. Для wasm буфера в API нет, поэтому
+ * MediaPipe получает адрес blob'а: полагаться на кэш браузера нельзя, Chrome на чистом профиле
+ * держит кэш в памяти и файл такого размера в него не кладёт — получалась двойная загрузка.
+ * Сбой любого из двух не фатален: MediaPipe возьмёт файл по обычному адресу сам.
+ */
+async function prepare(fileset: Fileset, modelUrl: string, meter: LoadMeter | undefined): Promise<Prepared> {
+  if (!meter) return { fileset, model: undefined, release: () => undefined }
+  const [model, wasm] = await Promise.all([
+    meter.fetch('model', modelUrl).catch(() => undefined),
+    meter.fetch('wasm', fileset.wasmBinaryPath).catch(() => undefined),
+  ])
+  if (!wasm) return { fileset, model, release: () => undefined }
+  const url = URL.createObjectURL(new Blob([wasm], { type: WASM_MIME }))
+  return { fileset: { ...fileset, wasmBinaryPath: url }, model, release: () => URL.revokeObjectURL(url) }
 }
 
 /** Перевод результата MediaPipe в сырые руки. */
@@ -65,14 +107,25 @@ export class HandTracker {
   static async create(opts: TrackerOptions = {}): Promise<HandTracker> {
     const wasmUrl = resolveUrl(opts.wasmPath ?? WASM_PATH)
     const modelUrl = resolveUrl(opts.modelPath ?? MODEL_PATH)
+    let release = (): void => undefined
     try {
-      return new HandTracker(await createLandmarker(wasmUrl, modelUrl, 'GPU'), 'GPU')
-    } catch {
+      const resolved = await FilesetResolver.forVisionTasks(wasmUrl)
+      const ready = await prepare(resolved, modelUrl, opts.meter)
+      release = ready.release
+      // Буфер отдаётся свежей копией: откат на CPU создаёт распознаватель второй раз.
+      const source = (): ModelSource =>
+        ready.model ? { modelAssetBuffer: new Uint8Array(ready.model) } : { modelAssetPath: modelUrl }
+      const first = opts.delegate ?? 'GPU'
+      const fallback: Delegate = first === 'GPU' ? 'CPU' : 'GPU'
       try {
-        return new HandTracker(await createLandmarker(wasmUrl, modelUrl, 'CPU'), 'CPU')
-      } catch (err) {
-        throw new TrackerLoadError(err)
+        return new HandTracker(await createLandmarker(ready.fileset, source(), first, opts.numHands), first)
+      } catch {
+        return new HandTracker(await createLandmarker(ready.fileset, source(), fallback, opts.numHands), fallback)
       }
+    } catch (err) {
+      throw new TrackerLoadError(err)
+    } finally {
+      release()
     }
   }
 

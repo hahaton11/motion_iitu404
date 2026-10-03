@@ -7,6 +7,8 @@ import { readFileSync } from 'node:fs'
 import type { Dataset, GestureLabel } from '../src/dataset/protocol'
 import { handFeatures } from '../src/gestures/features'
 import { predictKnn, trainKnn } from '../src/gestures/knn'
+import type { Pose } from '../src/gestures/model'
+import { DEFAULT_VOTER, initialVoter, stepVoter, type BelowThreshold, type VoterParams } from '../src/gestures/voter'
 import { closureOf, fingerCurls, isIndexOnly } from '../src/motion/features'
 import type { Landmarks } from '../src/motion/types'
 
@@ -19,12 +21,66 @@ const CLASSES: readonly Cls[] = (['idle', 'open', 'fist', 'pinch', 'point', 'vic
 const toCls = (l: GestureLabel): Cls => (l === 'none' || l === 'relaxed' ? 'idle' : l)
 const toLm = (pts: readonly (readonly number[])[]): Landmarks => pts.map(([x = 0, y = 0, z = 0]) => ({ x, y, z }))
 
+/** Только кадры этой руки: HAND=Right. Пусто — обе. */
+const HAND = process.env.HAND ?? ''
+/**
+ * Чем отложенная часть отделена от обучающей.
+ * `round` (по умолчанию) — первый круг учит, второй проверяет. Честнее всего, пока оба круга
+ *   сняты в одинаковых условиях. Если посреди записи сменилась рука или свет, этот split
+ *   померяет перенос между условиями, а не качество распознавания.
+ * `time` — внутри каждой группы «класс + круг + рука» первые 70 % кадров учат, последние 30 %
+ *   проверяют. Соседние кадры похожи, поэтому цифра выйдет оптимистичнее отложенного круга,
+ *   но она хотя бы отвечает на заданный вопрос.
+ */
+const SPLIT = process.env.SPLIT === 'time' ? 'time' : 'round'
+const TRAIN_SHARE = 0.7
+/** Параметры голосователя для перебора: THRESHOLD=0.65 GESTURE_NEED=2. */
+const envNum = (key: string, fallback: number): number => {
+  const v = Number(process.env[key])
+  return Number.isFinite(v) && v > 0 ? v : fallback
+}
+const TUNED: VoterParams = {
+  ...DEFAULT_VOTER,
+  threshold: envNum('THRESHOLD', DEFAULT_VOTER.threshold),
+  gestureNeed: envNum('GESTURE_NEED', DEFAULT_VOTER.gestureNeed),
+}
+
 const file = process.argv[2]
 if (!file) throw new Error('usage: tsx scripts/eval-gestures.ts data/gestures.json')
 const data = JSON.parse(readFileSync(file, 'utf8')) as Dataset
-const rows = data.samples.filter((s) => !DROP.has(s.label) || ABSORB.has(s.label)).map((s) => ({ s, cls: toCls(s.label), f: handFeatures(toLm(s.world), s.handLabel) }))
-const train = rows.filter((r) => r.s.round === 0)
-const test = rows.filter((r) => r.s.round === 1 && !ABSORB.has(r.cls))
+type Row = { s: Dataset['samples'][number]; cls: Cls; f: readonly number[] }
+const rows: Row[] = data.samples
+  .filter((s) => (!DROP.has(s.label) || ABSORB.has(s.label)) && (!HAND || s.handLabel === HAND))
+  .map((s) => ({ s, cls: toCls(s.label), f: handFeatures(toLm(s.world), s.handLabel) }))
+
+function splitByTime(all: readonly Row[]): { train: Row[]; test: Row[] } {
+  const groups = new Map<string, Row[]>()
+  all.forEach((r) => {
+    const key = `${r.s.label}|${r.s.round}|${r.s.handLabel}`
+    const g = groups.get(key)
+    if (g) g.push(r)
+    else groups.set(key, [r])
+  })
+  const train: Row[] = []
+  const test: Row[] = []
+  groups.forEach((g) => {
+    const sorted = [...g].sort((a, b) => a.s.t - b.s.t)
+    const cut = Math.floor(sorted.length * TRAIN_SHARE)
+    sorted.forEach((r, i) => (i < cut ? train : test).push(r))
+  })
+  // Голосователь сбрасывается на смене класса и на разрыве во времени, поэтому отложенная
+  // часть идёт классами подряд и по возрастанию времени внутри класса.
+  test.sort((a, b) => (a.cls === b.cls ? a.s.t - b.s.t : a.cls.localeCompare(b.cls)))
+  return { train, test }
+}
+
+const split =
+  SPLIT === 'time'
+    ? splitByTime(rows)
+    : { train: rows.filter((r) => r.s.round === 0), test: rows.filter((r) => r.s.round === 1) }
+const train = split.train
+const test = split.test.filter((r) => !ABSORB.has(r.cls))
+console.log(`split=${SPLIT}${HAND ? ` hand=${HAND}` : ''}: обучение ${train.length} кадров, проверка ${test.length}`)
 
 const model = trainKnn(train.map((r) => r.f), train.map((r) => r.cls), 7)
 const raw = test.map((r) => {
@@ -62,28 +118,34 @@ for (const th of [0.6, 0.75, 0.9]) {
   report(`kNN, порог уверенности ${th}`, raw.map((p) => ({ truth: p.truth, pred: p.confidence >= th ? p.label : 'idle' })))
 }
 
-// Сглаживание: класс засчитывается, если он победил в N кадрах из последних W внутри одной записи.
-function smooth(preds: readonly { truth: Cls; label: Cls; confidence: number; t: number }[], w: number, need: number, th: number) {
+/**
+ * Сглаживание настоящим голосователем из src/gestures/voter.ts, а не его копией:
+ * иначе оценка меряет одно, а в продукте работает другое.
+ * Запись начинается заново, когда меняется класс или в записи разрыв больше 500 мс.
+ */
+function vote(preds: readonly { truth: Cls; label: Cls; confidence: number; t: number }[], p: VoterParams) {
   const out: { truth: Cls; pred: Cls }[] = []
-  let hist: Cls[] = []
+  let s = initialVoter()
   let prevTruth: Cls | undefined
   let prevT = -Infinity
-  for (const p of preds) {
-    if (p.truth !== prevTruth || p.t - prevT > 500) hist = []
-    prevTruth = p.truth
-    prevT = p.t
-    hist = [...hist, p.confidence >= th ? p.label : 'idle'].slice(-w)
-    const counts = new Map<Cls, number>()
-    hist.forEach((c) => counts.set(c, (counts.get(c) ?? 0) + 1))
-    let pred: Cls = 'idle'
-    counts.forEach((n, c) => {
-      if (c !== 'idle' && n >= need) pred = c
-    })
-    out.push({ truth: p.truth, pred })
+  for (const row of preds) {
+    if (row.truth !== prevTruth || row.t - prevT > 500) s = initialVoter()
+    prevTruth = row.truth
+    prevT = row.t
+    s = stepVoter(s, { label: row.label as Pose, confidence: row.confidence }, p)
+    out.push({ truth: row.truth, pred: s.stable as Cls })
   }
   return out
 }
-report('kNN, порог 0.75 + 4 из 6 кадров', smooth(raw.map((p) => ({ ...p, label: p.label })), 6, 4, 0.75))
+
+const BELOW: Readonly<Record<BelowThreshold, string>> = {
+  idle: 'неуверенный кадр голосует за idle',
+  skip: 'неуверенный кадр занимает место в окне, но не голосует',
+  abstain: 'неуверенный кадр не попадает в окно',
+}
+for (const [belowThreshold, title] of Object.entries(BELOW) as [BelowThreshold, string][]) {
+  report(`4 из 6 кадров: ${title}`, vote(raw, { ...TUNED, belowThreshold }))
+}
 
 // Текущие правила motion: кулак при closure > 0.75 и не указательный, указательный — indexOnly.
 const rules = test.map((r) => {

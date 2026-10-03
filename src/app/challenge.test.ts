@@ -35,7 +35,7 @@ function perfectBoard(): CheckedElement[] {
     w: S,
     h: S,
   }))
-  return [...useful, { id: 'pk-new', ...centerOf('promo'), w: S, h: S }]
+  return [...useful, { id: 'pk-new', ...centerOf('comms'), w: S, h: S }]
 }
 
 const seeded = (): CheckedElement[] => seedLayout().map((s) => ({ id: s.id, x: s.x, y: s.y, w: S, h: S }))
@@ -73,7 +73,7 @@ describe('evaluate', () => {
 
   it('wrong cluster does not count, removed useful idea does not count', () => {
     const board = perfectBoard()
-      .map((el) => (el.id === ideaElementId(IDEAS[0]!) ? { ...el, ...centerOf('space') } : el))
+      .map((el) => (el.id === ideaElementId(IDEAS[0]!) ? { ...el, ...centerOf('life') } : el))
       .filter((el) => el.id !== ideaElementId(IDEAS[1]!))
     const e = evaluate(board)
     expect(e.placed).toBe(7)

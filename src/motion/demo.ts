@@ -1,5 +1,6 @@
 import type { InputEventMap, InputEventType } from '../contracts/input'
 import { CameraInput } from './camera-input'
+import { DEFAULT_CAMERA_SIZE } from './camera'
 import { drawHands, syncCanvas } from './demo-draw'
 import { FixtureRecorder, recordVideo, VIDEO_RECORD_MS } from './demo-record'
 import { DemoView } from './demo-view'
@@ -12,10 +13,31 @@ const LOGGED: readonly InputEventType[] = ['grab', 'release', 'throw', 'point', 
 const MS_PER_S = 1000
 const COUNTDOWN_MS = 250
 
+/**
+ * Настройки распознавания из адресной строки, чтобы сравнивать варианты без пересборки:
+ * `?w=640&h=360&fps=60&delegate=cpu&hands=1`. Замер показал, что кадр 1280×720 стоит 62 мс
+ * на вызов при GPU-делегате, то есть конвейер упирается в размер входа, а не в камеру.
+ */
+const params = new URLSearchParams(location.search)
+const num = (key: string): number | undefined => {
+  const v = Number(params.get(key))
+  return Number.isFinite(v) && v > 0 ? v : undefined
+}
+const w = num('w')
+const h = num('h')
+const cameraSize = w && h ? { width: w, height: h, fps: num('fps') ?? DEFAULT_CAMERA_SIZE.fps } : undefined
+const delegate = params.get('delegate')?.toUpperCase() === 'CPU' ? ('CPU' as const) : undefined
+const numHands = num('hands')
+
 const root = document.getElementById('app')
 if (!root) throw new Error('motion.html needs #app')
 const view = new DemoView(root)
-const input = new CameraInput({ video: view.video })
+const input = new CameraInput({
+  video: view.video,
+  ...(cameraSize ? { cameraSize } : {}),
+  ...(delegate ? { delegate } : {}),
+  ...(numHands ? { numHands } : {}),
+})
 
 let pending: OutEvent[] = []
 let fixture: FixtureRecorder | undefined

@@ -3,6 +3,8 @@ export type { CalibrationProgress, CameraInputOptions, FrameInfo } from './camer
 export { CameraError, CAMERA_ERROR_TEXTS } from './camera'
 export type { CameraErrorCode } from './camera'
 export { TrackerLoadError } from './tracker'
+export { formatMb } from './loading'
+export type { LoadProgress } from './loading'
 export { CALIBRATION_PROMPTS } from './calibration'
 export type { CalibrationResult } from './calibration'
 export { HINT_TEXTS } from './hints'

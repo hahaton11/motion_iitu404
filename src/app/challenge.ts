@@ -2,12 +2,16 @@ import type { HintEvt } from '../contracts/input'
 import { centerIn, rect, touchesEdge, type Placed, type WorldRect } from './zones'
 
 /**
- * Челлендж «Разбери брейншторм»: 12 идей про открытие кофейни, три кластера и корзина.
- * Девять идей раскладываются по смыслу, три лишние выбрасываются, одна новая добавляется из кармана.
+ * Челлендж «Разбери поток»: 12 входящих сообщений, три системы и шлюз.
+ * Девять раскладываются по системам, три помехи выбрасываются, одно новое достаётся из кармана.
  * Раскладка задана в мировых координатах для экрана 1440×900, камера подгоняет её зумом.
+ *
+ * Сценарий выбран под то, чем управляют руками: оператор стоит перед большим экраном,
+ * до которого не дотягивается и которого не касается. Выброс помехи в шлюз — это тот же
+ * резкий бросок, и здесь он означает ровно то, на что похож.
  */
 
-export type ClusterId = 'menu' | 'promo' | 'space'
+export type ClusterId = 'power' | 'comms' | 'life'
 export type IdeaTarget = ClusterId | 'trash'
 
 export interface Cluster {
@@ -48,8 +52,8 @@ export interface ChallengeProgress {
   readonly added: boolean
 }
 
-export const CHALLENGE_TITLE = 'Разбери брейншторм: открываем кофейню'
-export const CHALLENGE_TASK = 'Разложи идеи по зонам, 3 лишние выброси, 1 новую достань из кармана'
+export const CHALLENGE_TITLE = 'Разбери поток: смена у пульта'
+export const CHALLENGE_TASK = 'Разведи сообщения по системам, 3 помехи выброси в шлюз, 1 донесение достань из кармана'
 
 /** Раскладка для экрана этого размера в мировых единицах, камера подгоняет её зумом. */
 export const LAYOUT_W = 1480
@@ -58,28 +62,29 @@ export const STICKER_SIZE = 140
 export const CHALLENGE_LIMIT_MS = 180_000
 
 export const CLUSTERS: readonly Cluster[] = [
-  { id: 'menu', title: 'Меню', rect: rect(-700, -335, -260, -30) },
-  { id: 'promo', title: 'Продвижение', rect: rect(-220, -335, 220, -30) },
-  { id: 'space', title: 'Интерьер', rect: rect(260, -335, 700, -30) },
+  { id: 'power', title: 'Энергия', rect: rect(-700, -335, -260, -30) },
+  { id: 'comms', title: 'Связь', rect: rect(-220, -335, 220, -30) },
+  { id: 'life', title: 'Жизнеобеспечение', rect: rect(260, -335, 700, -30) },
 ]
 
 export const TRASH: WorldRect = rect(300, 0, 700, 310)
-export const TRASH_TITLE = 'Корзина'
-export const TRASH_NOTE = 'брось резко или опусти сюда лишнее'
+export const TRASH_TITLE = 'Шлюз'
+export const TRASH_NOTE = 'брось резко или опусти сюда помехи'
 
+/** Помехи распознаются без знания предметной области: это шум, а не спорное решение. */
 export const IDEAS: readonly ChallengeIdea[] = [
-  { id: 'latte', text: 'Овсяный латте', target: 'menu' },
-  { id: 'loyalty', text: 'Карта лояльности', target: 'promo' },
-  { id: 'mars', text: 'Полететь на Марс', target: 'trash' },
-  { id: 'chairs', text: 'Мягкие кресла', target: 'space' },
-  { id: 'desserts', text: 'Сезонные десерты', target: 'menu' },
-  { id: 'social', text: 'Посты в соцсетях', target: 'promo' },
-  { id: 'sockets', text: 'Розетки у столиков', target: 'space' },
-  { id: 'croc', text: 'Завести крокодила', target: 'trash' },
-  { id: 'students', text: 'Скидка студентам', target: 'promo' },
-  { id: 'breakfast', text: 'Завтраки весь день', target: 'menu' },
-  { id: 'latin', text: 'Выучить латынь', target: 'trash' },
-  { id: 'plants', text: 'Живые растения', target: 'space' },
+  { id: 'reactor', text: 'Реактор на 80 %', target: 'power' },
+  { id: 'uplink', text: 'Канал с бортом', target: 'comms' },
+  { id: 'sunspot', text: 'Помеха от вспышки', target: 'trash' },
+  { id: 'oxygen', text: 'Кислород в норме', target: 'life' },
+  { id: 'battery', text: 'Резерв батарей', target: 'power' },
+  { id: 'docking', text: 'Запрос на стыковку', target: 'comms' },
+  { id: 'filters', text: 'Фильтры воздуха', target: 'life' },
+  { id: 'echo', text: 'Эхо старого сигнала', target: 'trash' },
+  { id: 'relay', text: 'Ретранслятор поднят', target: 'comms' },
+  { id: 'coolant', text: 'Перегрев контура', target: 'power' },
+  { id: 'noise', text: 'Шум датчика', target: 'trash' },
+  { id: 'pressure', text: 'Давление в шлюзе', target: 'life' },
 ]
 
 const ID_PREFIX = 'ch-'

@@ -49,11 +49,12 @@ const TEMPLATE = html`<div class="md">
         <button data-a="frames" disabled>Сохранить кадры</button>
       </div>
     </section>
-    <section class="md-card">
+    <section class="md-card md-frame">
       <h3>Кадр</h3>
       <div class="md-row"><span>FPS</span><span data-f="fps">—</span></div>
       <div class="md-row"><span>обработка кадра</span><span data-f="latency">—</span></div>
       <div class="md-row"><span>delegate</span><span data-f="delegate">—</span></div>
+      <div class="md-row"><span>размер кадра</span><span data-f="size">—</span></div>
       <div class="md-row"><span>пороги open / hold</span><span data-f="thresholds">—</span></div>
     </section>
     ${handCard('right')}
@@ -97,6 +98,9 @@ export class DemoView {
     this.field('fps').textContent = info.stats.fps.toFixed(0)
     this.field('latency').textContent = `${info.stats.latencyMs.toFixed(1)} мс`
     this.field('delegate').textContent = info.delegate
+    // Настоящий размер потока, а не запрошенный: ideal-ограничения камера вправе не выполнить.
+    const { videoWidth, videoHeight } = this.video
+    this.field('size').textContent = videoWidth ? `${videoWidth}×${videoHeight}` : '—'
     this.field('thresholds').textContent = `${info.thresholds.open.toFixed(2)} / ${info.thresholds.hold.toFixed(2)}`
     ;(['left', 'right'] as const).forEach((hand) => this.renderHand(hand, info.hands.find((h) => h.hand === hand), info.thresholds))
   }

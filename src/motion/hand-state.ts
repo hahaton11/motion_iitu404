@@ -1,8 +1,9 @@
-import { POINT_HOLD_MS, THROW_SPEED } from '../shared/constants'
+import { POINT_HOLD_MS, THROW_MEMORY_MS, THROW_SPEED } from '../shared/constants'
 import { VelocityTracker, speedOf } from '../shared/velocity'
 import {
   DEFAULT_HOLD_THRESHOLD,
   DEFAULT_OPEN_THRESHOLD,
+  FAST_RELEASE_FRAMES,
   GRAB_FRAMES,
   HAND_LOST_MS,
   POINT_MOVE_MAX,
@@ -50,8 +51,10 @@ export interface HandState {
   /** Сколько кадров подряд держится условие перехода. */
   readonly count: number
   readonly vel: VelocityTracker
-  /** Самая большая скорость с начала раскрытия, из неё решается throw. */
+  /** Самая большая скорость за последние THROW_MEMORY_MS, из неё решается throw. */
   readonly peak: Velocity
+  /** Когда снят peak. Показание старше THROW_MEMORY_MS не считается: мах кончился. */
+  readonly peakAt: number
   readonly point: PointTimer | undefined
   readonly lastSeen: number | undefined
   readonly x: number
@@ -72,6 +75,7 @@ export const initialHandState = (): HandState => ({
   count: 0,
   vel: VelocityTracker.empty(),
   peak: ZERO,
+  peakAt: -Infinity,
   point: undefined,
   lastSeen: undefined,
   x: 0.5,
@@ -84,26 +88,48 @@ export const isPresent = (s: HandState): boolean => s.lastSeen !== undefined
 
 const faster = (a: Velocity, b: Velocity): Velocity => (speedOf(b) > speedOf(a) ? b : a)
 
+/** Запомненный мах, если он ещё не истёк к моменту `at`. */
+const freshPeak = (s: HandState, at: number): Velocity => (at - s.peakAt <= THROW_MEMORY_MS ? s.peak : ZERO)
+
+/**
+ * Самая быстрая скорость за окно THROW_MEMORY_MS. Считается на каждом кадре, а не с начала раскрытия:
+ * поза раскрытия приходит от классификатора уже после конца маха, и к тому кадру скорость нулевая.
+ */
+function rememberPeak(s: HandState, t: number): HandState {
+  const v = s.vel.velocity()
+  const fresh = freshPeak(s, t)
+  return speedOf(v) > speedOf(fresh) ? { ...s, peak: v, peakAt: t } : { ...s, peak: fresh }
+}
+
 function stepPhase(s: HandState, f: HandFrame, th: Thresholds): StepResult {
   const closed = f.closure > th.hold && !f.indexOnly
   const opened = f.closure < th.open
-  const v = s.vel.velocity()
   switch (s.phase) {
     case 'open':
     case 'closing': {
       if (!closed) return { state: { ...s, phase: 'open', count: 0 }, events: [] }
       const count = s.count + 1
       if (count < GRAB_FRAMES) return { state: { ...s, phase: 'closing', count }, events: [] }
-      return { state: { ...s, phase: 'holding', count: 0, point: undefined }, events: [{ type: 'grab', x: f.x, y: f.y }] }
+      // Мах, которым рука дотянулась до элемента, броском не считается: окно начинается с захвата.
+      return {
+        state: { ...s, phase: 'holding', count: 0, point: undefined, peak: ZERO, peakAt: -Infinity },
+        events: [{ type: 'grab', x: f.x, y: f.y }],
+      }
     }
     case 'holding':
     case 'opening': {
       if (!opened) return { state: { ...s, phase: 'holding', count: 0 }, events: [] }
       const count = s.count + 1
-      const peak = s.phase === 'opening' ? faster(s.peak, v) : v
-      if (count < RELEASE_FRAMES) return { state: { ...s, phase: 'opening', count, peak }, events: [] }
+      // peak уже посчитан rememberPeak по окну THROW_MEMORY_MS: мах мог кончиться кадров пять назад,
+      // пока голосователь набирал большинство за раскрытую ладонь.
+      const peak = s.peak
+      // Подтверждение отпускания короче, когда рука уже летит: бросок длится доли секунды,
+      // и три кадра подтверждения поверх окна голосования в него не помещаются.
+      // Промах в сторону раннего отпускания стоит недолёта, промах в сторону позднего — броска целиком.
+      const need = speedOf(peak) > THROW_SPEED ? FAST_RELEASE_FRAMES : RELEASE_FRAMES
+      if (count < need) return { state: { ...s, phase: 'opening', count }, events: [] }
       const type = speedOf(peak) > THROW_SPEED ? 'throw' : 'release'
-      return { state: { ...s, phase: 'open', count: 0, peak: ZERO }, events: [{ type, x: f.x, y: f.y, ...peak }] }
+      return { state: { ...s, phase: 'open', count: 0, peak: ZERO, peakAt: -Infinity }, events: [{ type, x: f.x, y: f.y, ...peak }] }
     }
   }
 }
@@ -120,17 +146,28 @@ function stepPoint(s: HandState, f: HandFrame): StepResult {
 /** Шаг по кадру, в котором рука видна. */
 export function stepHand(s: HandState, f: HandFrame, th: Thresholds = DEFAULT_THRESHOLDS): StepResult {
   const seen: HandState = { ...s, vel: s.vel.push(f.x, f.y, f.t), lastSeen: f.t, x: f.x, y: f.y }
-  const a = stepPhase(seen, f, th)
+  const a = stepPhase(rememberPeak(seen, f.t), f, th)
   const b = stepPoint(a.state, f)
   return { state: b.state, events: [...a.events, ...b.events] }
 }
 
 /**
- * Шаг по кадру, в котором руки нет. После HAND_LOST_MS шлёт handlost,
- * а если рука держала элемент, перед этим release с нулевой скоростью.
+ * Шаг по кадру, в котором руки нет. После HAND_LOST_MS шлёт handlost, а если рука держала
+ * элемент — перед этим отпускание с той скоростью, с которой рука пропала.
+ *
+ * Скорость здесь важна. Рука теряется как раз на резком махе: детектор не успевает за
+ * смазанным кадром. С нулевой скоростью бросок превращался в вялое падение на месте —
+ * пользователь махнул, а элемент просто лёг под руку.
  */
 export function stepHandMissing(s: HandState, t: number): StepResult {
   if (s.lastSeen === undefined || t - s.lastSeen < HAND_LOST_MS) return { state: s, events: [] }
-  const release: HandEvent[] = isHoldingPhase(s.phase) ? [{ type: 'release', x: s.x, y: s.y, ...ZERO }] : []
-  return { state: initialHandState(), events: [...release, { type: 'handlost' }] }
+  const events: HandEvent[] = []
+  if (isHoldingPhase(s.phase)) {
+    // Свежесть маха мерится по последнему кадру, где рука была видна, а не по `t`: вопрос в том,
+    // летела ли рука в момент, когда пропала, а не насколько поздно пришёл этот вызов.
+    const peak = faster(freshPeak(s, s.lastSeen), s.vel.velocity())
+    const type = speedOf(peak) > THROW_SPEED ? 'throw' : 'release'
+    events.push({ type, x: s.x, y: s.y, ...peak })
+  }
+  return { state: initialHandState(), events: [...events, { type: 'handlost' }] }
 }

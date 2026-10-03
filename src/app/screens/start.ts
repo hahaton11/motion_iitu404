@@ -1,6 +1,7 @@
 import type { AppContext, CameraStatus, ScreenHandle } from '../context'
 import { el, isolate, text } from '../dom'
 import type { InputMode } from '../flow'
+import { loadBar } from '../load-bar'
 
 /** Старт: название, одна фраза, крупная кнопка «Начать» и переключатель «Камера / Мышь». */
 
@@ -50,11 +51,13 @@ export function mountStart(ctx: AppContext): ScreenHandle {
     },
   })
   const free = ctx.buttons.create({ label: 'Свободная доска', variant: 'ghost', onPress: () => ctx.send({ type: 'free' }) })
+  const load = loadBar()
   const sync = () => {
     const mode = ctx.flow().mode
     const cam = ctx.cameraStatus()
     status.textContent = mode === 'mouse' ? MOUSE_HELP : cam.phase === 'failed' ? (cam.message ?? '') : STATUS_TEXT[cam.phase]
     status.dataset.phase = mode === 'mouse' ? 'mouse' : cam.phase
+    load.update(mode === 'camera' && cam.phase === 'loading' ? cam.progress : undefined)
     switcher.sync()
   }
   const switcher = modeSwitch(ctx, () => sync())
@@ -62,10 +65,12 @@ export function mountStart(ctx: AppContext): ScreenHandle {
     'div',
     'app-card app-start',
     el('h1', 'app-logo', 'Motion ', text('b', '', 'Board')),
-    text('p', 'app-lead', 'Доска для брейншторма, которой управляют руками перед веб-камерой, как голограммой'),
+    text('p', 'app-lead', 'Пульт, до которого не нужно дотягиваться. Руки перед камерой — и экран слушается'),
+    text('p', 'app-sub', 'Стоя в двух метрах, в перчатках, у общего экрана: мыши там нет, а камера есть в любом ноутбуке'),
     start,
     text('p', 'app-caption', 'Нажми или задержи открытую ладонь на кнопке одну секунду'),
     status,
+    load.node,
     el('div', 'app-row', switcher.node, free),
   )
   const screen = el('section', 'app-screen is-full', isolate(card))

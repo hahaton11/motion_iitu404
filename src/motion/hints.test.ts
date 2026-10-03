@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { HintEvt } from '../contracts/input'
+import { HINT_GAP_MS } from './constants'
 import { DEFAULT_THRESHOLDS } from './hand-state'
 import { HINT_TEXTS, initialHints, stepHints, type HintHandInput, type HintInput } from './hints'
 
@@ -46,6 +47,49 @@ describe('stepHints', () => {
 
   it('HALF_RELEASE in the band while holding', () => {
     expect(codes(runFor({ hands: [hand({ closure: 0.6, phase: 'holding' })] }, 700))).toEqual(['HALF_RELEASE'])
+  })
+
+  /*
+   * На экране один тост, поэтому из нескольких сработавших условий уходит одно. Пока уходили
+   * все, показывалось последнее по списку: рука у края кадра отвечала «отойди на шаг назад».
+   */
+  it('sends one hint at a time and picks the more fundamental one', () => {
+    const atEdge = hand({ center: { x: 0.02, y: 0.5 }, palmSize: 0.5, closure: 0.6 })
+    expect(codes(runFor({ hands: [atEdge] }, 700))).toEqual(['HAND_NEAR_EDGE'])
+  })
+
+  /*
+   * Расстояние считается по размеру ладони, а у края кадра часть точек обрезана и размер завышен.
+   * Советовать там отойти — это отвечать не на ту проблему.
+   */
+  it('says nothing about distance while the hand is at the edge', () => {
+    const far = hand({ center: { x: 0.02, y: 0.5 }, palmSize: 0.01 })
+    expect(codes(runFor({ hands: [far] }, 4000))).not.toContain('TOO_FAR')
+  })
+
+  it('still reports distance once the hand is back in the middle', () => {
+    expect(codes(runFor({ hands: [hand({ palmSize: 0.5 })] }, 700))).toEqual(['TOO_CLOSE'])
+  })
+
+  /*
+   * Условие, проигравшее приоритет, не должно терять свой отсчёт: иначе оно созревает заново
+   * каждый кадр и не срабатывает никогда, даже когда более важное уже отговорило.
+   */
+  it('keeps the loser ripening while a more important hint is shown', () => {
+    const both = hand({ center: { x: 0.02, y: 0.5 }, closure: 0.6 })
+    const hs = runFor({ hands: [both] }, 5000)
+    expect(codes(hs)[0]).toBe('HAND_NEAR_EDGE')
+    expect(codes(hs)).toContain('HALF_GRAB')
+  })
+
+  /*
+   * Условия созревают за разное время, и вторая подсказка успевала подменить первую через долю
+   * секунды. Между любыми двумя должна быть пауза, иначе читать нечего.
+   */
+  it('leaves a readable gap between two different hints', () => {
+    const both = hand({ center: { x: 0.02, y: 0.5 }, closure: 0.6 })
+    const ts = runFor({ hands: [both] }, 5000).map((h) => h.t)
+    ts.slice(1).forEach((t, i) => expect(t - ts[i]!).toBeGreaterThanOrEqual(HINT_GAP_MS))
   })
 
   it('does not fire the half hints for short passes through the band', () => {

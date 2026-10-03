@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { HandId } from '../contracts/input'
+import { CALIBRATION_MIN_RANGE } from './constants'
 import { gestureEventTypes } from './fixtures'
 import { initialPipeline, processFrame, type OutEvent, type PipelineState } from './pipeline'
 import { POSES, syntheticHand, type FingerCurls } from './testing/synthetic-hand'
@@ -107,6 +108,28 @@ describe('processFrame with classifier pose', () => {
   }
   const n = <T,>(k: number, v: T): T[] => Array<T>(k).fill(v)
 
+  /*
+   * Калибровка ставит пороги open и hold, поэтому мерить она обязана геометрию, а не признаки
+   * для подсказок: те выводятся из этих же порогов и из состояния захвата. Пока круг был
+   * замкнут, кулак и ладонь давали одно и то же значение, диапазон выходил нулевым,
+   * и калибровка падала с «Раскрой ладонь шире» при исправно работающей руке.
+   */
+  it('reports geometric closure regardless of what the classifier decided', () => {
+    let state: PipelineState = initialPipeline()
+    const read = (label: P, curls: FingerCurls): number => {
+      const hand = { ...det({ pose: curls }), pose: { label, confidence: 0.95 } }
+      const r = processFrame(state, { t: 0, hands: [hand] })
+      state = r.state
+      return r.debug[0]!.geometry.closure
+    }
+    // Классификатор говорит «бездействие», но пальцы сжаты и разжаты по-настоящему.
+    const asFist = read('idle', POSES.fist)
+    const asOpen = read('idle', POSES.open)
+    expect(asFist).toBeGreaterThan(0.75)
+    expect(asOpen).toBeLessThan(0.45)
+    expect(asFist - asOpen).toBeGreaterThan(CALIBRATION_MIN_RANGE)
+  })
+
   it('grabs on a stable fist and releases only on an open palm, not on idle', () => {
     const ev = runPoses([...n(4, ['open'] as const), ...n(6, ['fist'] as const), ...n(20, ['idle'] as const), ...n(8, ['open'] as const)])
     expect(gestureEventTypes(ev)).toEqual(['grab', 'release'])
@@ -114,6 +137,18 @@ describe('processFrame with classifier pose', () => {
 
   it('never grabs on idle frames', () => {
     expect(gestureEventTypes(runPoses(n(60, ['idle'] as const)))).toEqual([])
+  })
+
+  it('grabs on a stable pinch the same way as on a fist', () => {
+    const ev = runPoses([...n(4, ['open'] as const), ...n(6, ['pinch'] as const), ...n(8, ['open'] as const)])
+    expect(gestureEventTypes(ev)).toEqual(['grab', 'release'])
+  })
+
+  // Захват держится на closure, а не на имени позы: смена кулака на щипок посреди переноса
+  // не должна выглядеть как отпускание и новый захват.
+  it('keeps holding when the grab pose switches between fist and pinch', () => {
+    const ev = runPoses([...n(4, ['open'] as const), ...n(6, ['fist'] as const), ...n(6, ['pinch'] as const), ...n(8, ['open'] as const)])
+    expect(gestureEventTypes(ev)).toEqual(['grab', 'release'])
   })
 
   it('pauses the cursor on idle and reports it as not engaged', () => {
@@ -170,6 +205,16 @@ describe('processFrame hints', () => {
     const fast = [0, 1, 2, 3].map((i) => one({ pose: POSES.open, x: 0.2 + i * 0.1 }))
     const hints = run([...fast, ...times(12, [])]).events.filter((e) => e.type === 'hint')
     expect(hints.map((h) => h.type === 'hint' && h.e.code)).toContain('MOVING_TOO_FAST')
+  })
+
+  /*
+   * Рука, уведённая за край, убрана намеренно, а не потеряна трекером. «Камера не успевает»
+   * в ответ на нормальное действие — ложная подсказка, а она хуже отсутствующей.
+   */
+  it('stays quiet when a fast hand leaves through the edge of the frame', () => {
+    const leaving = [0, 1, 2, 3].map((i) => one({ pose: POSES.open, x: 0.5 + i * 0.12 }))
+    const hints = run([...leaving, ...times(12, [])]).events.filter((e) => e.type === 'hint')
+    expect(hints.map((h) => h.type === 'hint' && h.e.code)).not.toContain('MOVING_TOO_FAST')
   })
 
   it('asks to close the fist fully for a half grab', () => {

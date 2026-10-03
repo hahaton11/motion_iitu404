@@ -4,11 +4,14 @@ import { predictKnn, trainKnn, type KnnModel } from './knn'
 
 /**
  * Классификатор позы руки на kNN, обученный на записанном датасете. Файл модели — признаки и метки
- * кадров, среднее и разброс считаются при загрузке. Классы-поглотители (щипок, большой палец)
+ * кадров, среднее и разброс считаются при загрузке. Классы-поглотители (большой палец)
  * забирают на себя похожие полусогнутые позы и на выходе считаются бездействием.
+ *
+ * Щипок — вторая поза захвата рядом с кулаком. Кулак требует держать кисть напряжённой и развёрнутой
+ * к камере, и на этом рука устаёт за секунды; щипок берётся расслабленной рукой под любым ракурсом.
  */
 
-export type Pose = 'idle' | 'open' | 'fist' | 'point' | 'victory'
+export type Pose = 'idle' | 'open' | 'fist' | 'pinch' | 'point' | 'victory'
 
 export interface RawPose {
   readonly label: Pose
@@ -24,7 +27,16 @@ export interface GestureModelFile {
   readonly features: readonly (readonly number[])[]
 }
 
-const POSES: ReadonlySet<string> = new Set<Pose>(['idle', 'open', 'fist', 'point', 'victory'])
+/** Как достать файл модели. Подменяется счётчиком загрузки, чтобы эти 2 МБ попали в индикатор. */
+export type FetchBytes = (url: string) => Promise<Uint8Array>
+
+const plainFetch: FetchBytes = async (url) => {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`Модель жестов не загрузилась: ${res.status}`)
+  return new Uint8Array(await res.arrayBuffer())
+}
+
+const POSES: ReadonlySet<string> = new Set<Pose>(['idle', 'open', 'fist', 'pinch', 'point', 'victory'])
 const toPose = (label: string, absorb: ReadonlySet<string>): Pose =>
   absorb.has(label) || !POSES.has(label) ? 'idle' : (label as Pose)
 
@@ -38,10 +50,9 @@ export class GestureClassifier {
     return new GestureClassifier(trainKnn(file.features, file.labels, file.k), new Set(file.absorb))
   }
 
-  static async load(url: string): Promise<GestureClassifier> {
-    const res = await fetch(url)
-    if (!res.ok) throw new Error(`Модель жестов не загрузилась: ${res.status}`)
-    return GestureClassifier.fromFile((await res.json()) as GestureModelFile)
+  static async load(url: string, fetchBytes: FetchBytes = plainFetch): Promise<GestureClassifier> {
+    const bytes = await fetchBytes(url)
+    return GestureClassifier.fromFile(JSON.parse(new TextDecoder().decode(bytes)) as GestureModelFile)
   }
 
   classify(world: Landmarks, handLabel: string): RawPose {

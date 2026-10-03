@@ -12,5 +12,6 @@
 .rec-btn { font: inherit; font-size: 16px; padding: 12px 16px; border-radius: 10px; border: 0; background: var(--accent); color: #041018; font-weight: 600; cursor: pointer; }
 .rec-btn[disabled] { opacity: 0.4; cursor: default; }
 .rec-counts { font: 13px/1.6 ui-monospace, monospace; color: var(--muted); white-space: pre; }
+.rec-note { font-size: 13px; line-height: 1.45; color: var(--muted); margin: 10px 0 0; }
 .rec-overlay { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); padding: 10px 18px; border-radius: 10px; background: rgba(0,0,0,0.6); font-size: 22px; font-weight: 700; }
 @media (max-width: 900px) { .rec { grid-template-columns: 1fr; grid-template-rows: 50vh auto; } }

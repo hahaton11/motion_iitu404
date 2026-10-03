@@ -139,14 +139,14 @@ describe('processFrame with classifier pose', () => {
     expect(gestureEventTypes(runPoses(n(60, ['idle'] as const)))).toEqual([])
   })
 
-  it('grabs on a stable pinch the same way as on a fist', () => {
-    const ev = runPoses([...n(4, ['open'] as const), ...n(6, ['pinch'] as const), ...n(8, ['open'] as const)])
-    expect(gestureEventTypes(ev)).toEqual(['grab', 'release'])
+  it('does not grab on a stable pinch: the pinch zooms, only the fist grabs', () => {
+    const ev = runPoses([...n(4, ['open'] as const), ...n(10, ['pinch'] as const), ...n(8, ['open'] as const)])
+    expect(gestureEventTypes(ev)).toEqual([])
   })
 
-  // Захват держится на closure, а не на имени позы: смена кулака на щипок посреди переноса
-  // не должна выглядеть как отпускание и новый захват.
-  it('keeps holding when the grab pose switches between fist and pinch', () => {
+  // Щипок не меняет захвата: смена кулака на щипок посреди переноса не должна выглядеть
+  // как отпускание и новый захват.
+  it('keeps holding when the grab pose switches from fist to pinch', () => {
     const ev = runPoses([...n(4, ['open'] as const), ...n(6, ['fist'] as const), ...n(6, ['pinch'] as const), ...n(8, ['open'] as const)])
     expect(gestureEventTypes(ev)).toEqual(['grab', 'release'])
   })

@@ -33,7 +33,7 @@ export const PINCH_GRAB_HINT_MS = 1000
 export const PINCH_GRAB_HINT_COOLDOWN_MS = 5000
 
 export const BOARD_HINTS = {
-  RELEASE_EDGE: { code: 'BOARD_RELEASE_EDGE', message: 'Отпусти элемент над доской, а не за её краем', severity: 'warn' },
+  RELEASE_EDGE: { code: 'BOARD_RELEASE_EDGE', message: 'Клади элемент над доской, а не за её краем', severity: 'warn' },
   TOOLBAR_POINT: {
     code: 'BOARD_TOOLBAR_POINT',
     message: 'Укажи на кнопку одним пальцем и задержи руку, чтобы выбрать действие',

@@ -37,7 +37,7 @@ export function mountFree(ctx: AppContext): ScreenHandle {
         .catch((err: unknown) => (status.textContent = err instanceof Error ? err.message : ''))
     },
   })
-  const help = 'Кулак — взять, бросок — удалить, два пальца — двигать доску, щипок вверх-вниз — масштаб, палец на стикере — диктовать, карман внизу'
+  const help = 'Кулак — взять, кулак и сразу ладонь — положить, то же на ходу — удалить, задержка над карманом — убрать, два пальца — двигать доску, щипок вверх-вниз — масштаб, палец на стикере — диктовать'
   const card = el(
     'div',
     'app-card app-free',

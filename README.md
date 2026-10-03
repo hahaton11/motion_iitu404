@@ -7,6 +7,8 @@
 
 **Презентация (PDF): https://hahaton11.github.io/motion_iitu404/presentation.pdf**
 
+**Видео живого прохода рукой: https://hahaton11.github.io/motion_iitu404/demo.mp4**
+
 Хакатон Admit 2026, кейс «Камера вместо джойстика». Команда **IITU404**.
 
 ---

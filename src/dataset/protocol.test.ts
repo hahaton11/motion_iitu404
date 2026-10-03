@@ -23,3 +23,11 @@ describe('protocol', () => {
     expect(runTo(total + 1000).kind).toBe('done')
   })
 })
+
+describe('stepsFor', () => {
+  it('keeps only the requested gestures in protocol order', async () => {
+    const { stepsFor } = await import('./protocol')
+    expect(stepsFor(['relaxed', 'pinch']).map((s) => s.label)).toEqual(['relaxed', 'pinch'])
+    expect(stepsFor([]).length).toBeGreaterThan(5)
+  })
+})

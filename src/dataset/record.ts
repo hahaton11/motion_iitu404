@@ -1,10 +1,13 @@
 import { CameraInput } from '../motion'
 import { drawHands, syncCanvas } from '../motion/demo-draw'
 import type { RawHand } from '../motion/landmarks'
-import { ROUNDS, STEPS, advance, start, totalMs, type Dataset, type GestureLabel, type Phase, type Sample } from './protocol'
+import { ROUNDS, advance, start, stepsFor, totalMs, type Dataset, type GestureLabel, type Phase, type Sample } from './protocol'
 import './record.css'
 
 /** Страница записи датасета: показывает жест, записывает кадры руки, отдаёт JSON для обучения. */
+
+/** Дозапись выбранных жестов: record.html?only=pinch,fist,relaxed. */
+const STEPS = stepsFor((new URLSearchParams(location.search).get('only') ?? '').split(',').filter(Boolean))
 
 const round4 = (v: number): number => Math.round(v * 1e4) / 1e4
 const pack = (pts: RawHand['landmarks']): number[][] => pts.map((p) => [round4(p.x), round4(p.y), round4(p.z)])
@@ -22,7 +25,7 @@ const stage = el('div', 'rec-stage')
 stage.append(video, canvas, overlay)
 const phaseEl = el('div', 'rec-phase', 'Подготовка')
 const titleEl = el('h1', 'rec-title', 'Запись жестов')
-const instrEl = el('p', 'rec-instr', `Используй ту руку, которой будешь управлять. Всего около ${Math.round(totalMs() / 60000)} минут, круг из ${STEPS.length} жестов повторится дважды.`)
+const instrEl = el('p', 'rec-instr', `Используй ту руку, которой будешь управлять. Всего около ${Math.max(1, Math.round(totalMs(STEPS) / 60000))} минут, круг из ${STEPS.length} жестов повторится дважды.`)
 const bar = el('div', 'rec-bar')
 const fill = el('div')
 bar.append(fill)
@@ -99,7 +102,7 @@ input.onFrame((info) => {
   const ctx = syncCanvas(canvas, video)
   if (ctx) drawHands(ctx, info.hands)
   const now = performance.now()
-  phase = advance(phase, now)
+  phase = advance(phase, now, STEPS)
   if (phase.kind === 'record') {
     const step = STEPS[phase.step]
     if (step) capture(info.t, info.raw, step.label, phase.round)

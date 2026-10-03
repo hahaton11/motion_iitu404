@@ -47,8 +47,8 @@ export const STEPS: readonly ProtocolStep[] = [
     label: 'pinch',
     title: 'Щипок',
     instruction:
-      'Большой и указательный касаются кончиками, остальные пальцы свободно. Половину времени води медленно ' +
-      'и поворачивай кисть, половину — резко переноси руку из стороны в сторону: щипком берут и несут элемент',
+      'Большой и указательный касаются кончиками, остальные пальцы согнуты. Половину времени води медленно ' +
+      'вверх-вниз и поворачивай кисть, половину — держи боком к камере: щипком меняют масштаб доски',
     recordMs: 14000,
   },
   { label: 'point', title: 'Указательный', instruction: 'Вытяни указательный, остальные согни. Води рукой', recordMs: 10000 },
@@ -80,19 +80,25 @@ export type Phase =
   | { readonly kind: 'done' }
 
 /** Следующая фаза по времени. Чистая функция для тестов. */
-export function advance(p: Phase, t: number): Phase {
+/** Только выбранные жесты, например для дозаписи одного жеста: ?only=pinch,fist. Пустой список — все. */
+export function stepsFor(only: readonly string[]): readonly ProtocolStep[] {
+  const picked = STEPS.filter((s) => only.includes(s.label))
+  return picked.length > 0 ? picked : STEPS
+}
+
+export function advance(p: Phase, t: number, steps: readonly ProtocolStep[] = STEPS): Phase {
   if (p.kind !== 'prep' && p.kind !== 'record') return p
-  const step = STEPS[p.step]
+  const step = steps[p.step]
   if (!step) return { kind: 'done' }
   if (p.kind === 'prep') return t - p.since >= PREP_MS ? { ...p, kind: 'record', since: t } : p
   if (t - p.since < step.recordMs) return p
   const nextStep = p.step + 1
-  if (nextStep < STEPS.length) return { kind: 'prep', round: p.round, step: nextStep, since: t }
+  if (nextStep < steps.length) return { kind: 'prep', round: p.round, step: nextStep, since: t }
   return p.round + 1 < ROUNDS ? { kind: 'prep', round: p.round + 1, step: 0, since: t } : { kind: 'done' }
 }
 
 export const start = (t: number): Phase => ({ kind: 'prep', round: 0, step: 0, since: t })
 
-export function totalMs(): number {
-  return ROUNDS * STEPS.reduce((sum, s) => sum + PREP_MS + s.recordMs, 0)
+export function totalMs(steps: readonly ProtocolStep[] = STEPS): number {
+  return ROUNDS * steps.reduce((sum, s) => sum + PREP_MS + s.recordMs, 0)
 }

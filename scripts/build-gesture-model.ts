@@ -1,13 +1,17 @@
-/** Собирает public/models/gestures-knn.json из датасета: все кадры обоих кругов. */
+/**
+ * Собирает public/models/gestures-knn.json из одной или нескольких записей: все кадры обоих кругов.
+ * Выходной файл задаётся OUT=..., по умолчанию public/models/gestures-knn.json.
+ */
 import { readFileSync, writeFileSync } from 'node:fs'
 import type { Dataset } from '../src/dataset/protocol'
 import { handFeatures } from '../src/gestures/features'
 import type { GestureModelFile } from '../src/gestures/model'
 import type { Landmarks } from '../src/motion/types'
 
-const [src, out = 'public/models/gestures-knn.json'] = process.argv.slice(2)
-if (!src) throw new Error('usage: tsx scripts/build-gesture-model.ts data/gestures.json [out]')
-const data = JSON.parse(readFileSync(src, 'utf8')) as Dataset
+const sources = process.argv.slice(2)
+const out = process.env.OUT ?? 'public/models/gestures-knn.json'
+if (sources.length === 0) throw new Error('usage: tsx scripts/build-gesture-model.ts data/a.json [data/b.json ...]')
+const data = { samples: sources.flatMap((src) => (JSON.parse(readFileSync(src, 'utf8')) as Dataset).samples) }
 const toLm = (pts: readonly (readonly number[])[]): Landmarks => pts.map(([x = 0, y = 0, z = 0]) => ({ x, y, z }))
 const round3 = (v: number): number => Math.round(v * 1e3) / 1e3
 const label = (l: string): string => (l === 'none' || l === 'relaxed' ? 'idle' : l)

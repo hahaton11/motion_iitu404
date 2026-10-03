@@ -1,5 +1,5 @@
-import type { InputSource, SwipeDir } from '../contracts/input'
-import { MOUSE_PINCH_ZOOM_GAIN, POINT_HOLD_MS, THROW_SPEED } from './constants'
+import type { HandId, InputSource, SwipeDir } from '../contracts/input'
+import { MOUSE_PINCH_ZOOM_GAIN, POINT_HOLD_MS, PUT_WINDOW_MS, THROW_MEMORY_MS, THROW_SPEED } from './constants'
 import { InputEmitter } from './emitter'
 import { VelocityTracker, speedOf } from './velocity'
 
@@ -11,7 +11,11 @@ const ARROWS: Readonly<Record<string, SwipeDir>> = { ArrowLeft: 'left', ArrowRig
 
 /**
  * Эмулятор жестов мышью с тем же контрактом, что у камеры.
- * ЛКМ = grab/release, резкий бросок = throw, колесо = zoom, Shift+ЛКМ удержание = point, стрелки = взмахи.
+ * Клик ЛКМ по элементу = взять: кнопка нажата — кулак, отпущена — ладонь, а элемент прилип и едет
+ * за мышью без зажатой кнопки. Второй клик = щелчок кулак → ладонь: на месте кладёт, на быстром ходу
+ * выбрасывает (throw), клик дольше PUT_WINDOW_MS только кладёт. Кнопка на пустом месте — кулак
+ * без элемента, отпускание его раскрывает, как у камеры.
+ * Колесо = zoom, Shift+ЛКМ удержание = point, стрелки = взмахи.
  * Перетаскивание средней или правой кнопкой, либо ЛКМ с зажатым пробелом = pan, как жест двух пальцев.
  * Alt + перетаскивание ЛКМ вверх или вниз = zoom, как щипок: курсор стоит в точке нажатия, вокруг неё
  * масштабируется доска, вверх — ближе, вниз — дальше. Рука всегда 'right'.
@@ -19,7 +23,14 @@ const ARROWS: Readonly<Record<string, SwipeDir>> = { ArrowLeft: 'left', ArrowRig
 export class MouseInput implements InputSource {
   private readonly em = new InputEmitter()
   private vel = VelocityTracker.empty()
+  /** Когда мышь двигалась в последний раз: скорость старше THROW_MEMORY_MS не считается махом. */
+  private movedAt = -Infinity
+  /** Кнопка зажата после захвата: кулак. */
   private holding = false
+  /** Доска держит элемент в руке: захват прилип. */
+  private carrying = false
+  /** Когда нажата кнопка второго клика, который положит или выбросит несомый элемент. */
+  private clickAt: number | undefined
   /** Где была мышь на прошлом событии панорамы. undefined — панорамы нет. */
   private panFrom: { x: number; y: number } | undefined
   /** Зум щипком: центр масштаба и y мыши на прошлом событии. undefined — зума нет. */
@@ -40,6 +51,8 @@ export class MouseInput implements InputSource {
     this.listen('pointerleave', () => {
       this.panFrom = undefined
       this.pinch = undefined
+      this.holding = false
+      this.clickAt = undefined
       this.em.emit('handlost', { hand: 'right' })
     })
     this.listen('contextmenu', (e) => e.preventDefault())
@@ -62,12 +75,25 @@ export class MouseInput implements InputSource {
     const dir = ARROWS[e.key]
     if (!dir || e.repeat) return
     e.preventDefault()
-    this.em.emit('swipe', { hand: 'right', dir, holding: this.holding })
+    this.em.emit('swipe', { hand: 'right', dir, holding: this.busy })
   }
 
   stop(): void {
     this.disposers.splice(0).forEach((d) => d())
     clearTimeout(this.pointTimer)
+  }
+
+  /** Доска взяла элемент в руку или забрала его без жеста, например в карман. */
+  setCarrying(_hand: HandId, carrying: boolean): void {
+    this.carrying = carrying
+    if (carrying) return
+    this.holding = false
+    this.clickAt = undefined
+  }
+
+  /** Рука что-то держит: кулак после захвата или прилипший элемент. */
+  private get busy(): boolean {
+    return this.holding || this.carrying
   }
 
   private listen(type: string, fn: EventListener, opts?: AddEventListenerOptions): void {
@@ -82,6 +108,7 @@ export class MouseInput implements InputSource {
   private onMove(e: PointerEvent): void {
     const { x, y } = this.norm(e)
     this.vel = this.vel.push(x, y, e.timeStamp)
+    this.movedAt = e.timeStamp
     if (this.pinch) {
       this.movePinch(y)
       return
@@ -108,20 +135,21 @@ export class MouseInput implements InputSource {
   private emitCursor(x: number, y: number): void {
     const panning = this.panFrom ? { panning: true } : {}
     const zooming = this.pinch ? { zooming: true } : {}
-    this.em.emit('cursor', { hand: 'right', x, y, closure: this.holding ? 1 : 0, holding: this.holding, ...panning, ...zooming })
+    const fist = this.holding || this.clickAt !== undefined
+    this.em.emit('cursor', { hand: 'right', x, y, closure: fist ? 1 : 0, holding: this.busy, ...panning, ...zooming })
   }
 
   private onDown(e: PointerEvent): void {
     const { x, y } = this.norm(e)
     const panButton = PAN_BUTTONS.has(e.button) || (e.button === LEFT_BUTTON && this.space)
-    if (panButton && !this.holding) {
+    if (panButton && !this.busy) {
       e.preventDefault()
       this.panFrom = { x, y }
       this.emitCursor(x, y)
       return
     }
     if (e.button !== LEFT_BUTTON) return
-    if (e.altKey && !this.holding) {
+    if (e.altKey && !this.busy) {
       e.preventDefault()
       this.pinch = { cx: x, cy: y, y }
       this.emitCursor(x, y)
@@ -129,6 +157,11 @@ export class MouseInput implements InputSource {
     }
     if (e.shiftKey) {
       this.pointTimer = setTimeout(() => this.em.emit('point', { hand: 'right', x, y }), POINT_HOLD_MS)
+      return
+    }
+    if (this.carrying) {
+      this.clickAt = e.timeStamp
+      this.emitCursor(x, y)
       return
     }
     this.holding = true
@@ -149,12 +182,25 @@ export class MouseInput implements InputSource {
       this.emitCursor(x, y)
       return
     }
+    const { x, y } = this.norm(e)
+    const clickAt = this.clickAt
+    this.clickAt = undefined
+    if (clickAt !== undefined) return this.drop(x, y, e.timeStamp - clickAt <= PUT_WINDOW_MS && this.flying(e.timeStamp))
     if (!this.holding) return
     this.holding = false
-    const { x, y } = this.norm(e)
-    const v = this.vel.velocity()
-    const type = speedOf(v) > THROW_SPEED ? 'throw' : 'release'
-    this.em.emit(type, { hand: 'right', x, y, ...v })
+    // Кнопка отпущена после захвата элемента: рука раскрылась, элемент прилип и едет дальше.
+    if (this.carrying) return this.emitCursor(x, y)
+    this.drop(x, y, this.flying(e.timeStamp))
+  }
+
+  /** Мышь только что летела быстрее порога броска. */
+  private flying(t: number): boolean {
+    return t - this.movedAt <= THROW_MEMORY_MS && speedOf(this.vel.velocity()) > THROW_SPEED
+  }
+
+  private drop(x: number, y: number, thrown: boolean): void {
+    this.carrying = false
+    this.em.emit(thrown ? 'throw' : 'release', { hand: 'right', x, y, ...this.vel.velocity() })
   }
 
   private onWheel(e: WheelEvent): void {

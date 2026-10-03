@@ -1,4 +1,4 @@
-import { POINT_HOLD_MS, THROW_MEMORY_MS, THROW_SPEED } from '../shared/constants'
+import { POINT_HOLD_MS, PUT_WINDOW_MS, THROW_MEMORY_MS, THROW_SPEED } from '../shared/constants'
 import { VelocityTracker, speedOf } from '../shared/velocity'
 import {
   DEFAULT_HOLD_THRESHOLD,
@@ -7,7 +7,6 @@ import {
   GRAB_FRAMES,
   HAND_LOST_MS,
   POINT_MOVE_MAX,
-  PUT_WINDOW_MS,
   RELEASE_FRAMES,
 } from './constants'
 import type { Thresholds } from './types'

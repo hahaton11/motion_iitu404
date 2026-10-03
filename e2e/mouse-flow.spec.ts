@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { CLUSTERS, IDEAS, TRASH_TITLE, ideaElementId, type IdeaTarget } from '../src/app/challenge'
 import { TUTORIAL_STEPS } from '../src/app/tutorial'
-import { centerOf, drag, fling, glide, pointAt, takeFromPocket, type Point } from './gestures'
+import { centerOf, click, drag, fling, glide, pointAt, putInPocket, takeFromPocket, type Point } from './gestures'
 
 /** Смоук на MouseInput: старт → обучение из пяти шагов → челлендж → финал. */
 
@@ -55,10 +55,8 @@ async function passTutorial(page: Page): Promise<void> {
   await expect(progress).toHaveText(stepLabel(4))
   const vp = page.viewportSize()
   const mid = { x: taken.x, y: (vp?.height ?? 0) * 0.55 }
-  const inPocket = { x: taken.x, y: (vp?.height ?? 0) * 0.95 }
   await glide(page, taken, mid)
-  await glide(page, mid, inPocket)
-  await page.mouse.up()
+  await putInPocket(page, mid)
 
   await expect(progress).toHaveText(stepLabel(5))
   const sticky = practice(spawnTextOf('voice'))
@@ -97,7 +95,7 @@ test('mouse: start, tutorial, challenge, final', async ({ page }) => {
 
   const taken = await takeFromPocket(page)
   await glide(page, taken, await slotIn(page, 'comms', 3))
-  await page.mouse.up()
+  await click(page)
 
   const final = page.locator('.app-final')
   await expect(final).toBeVisible({ timeout: 10_000 })

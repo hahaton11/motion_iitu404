@@ -1,7 +1,8 @@
 import { expect, type Locator, type Page } from '@playwright/test'
 
 /**
- * Жесты MouseInput для смоук-тестов. Эмулятор считает скорость по отметкам времени событий,
+ * Жесты MouseInput для смоук-тестов. Взятый элемент прилипает к руке: берут и кладут кликами,
+ * а между кликами кнопка не зажата. Эмулятор считает скорость по отметкам времени событий,
  * поэтому плавный перенос идёт мелкими шагами с паузами, а бросок — крупными и быстрыми.
  */
 
@@ -51,17 +52,23 @@ export async function glide(page: Page, from: Point, to: Point): Promise<void> {
   }
 }
 
-/** Взять кулаком, перенести плавно и раскрыть ладонь. */
-export async function drag(page: Page, from: Point, to: Point): Promise<void> {
-  await page.mouse.move(from.x, from.y)
+/** Клик: кулак и сразу ладонь. Первый берёт элемент, и он прилипает, второй кладёт или выбрасывает. */
+export async function click(page: Page): Promise<void> {
   await page.mouse.down()
-  await glide(page, from, to)
-  await wait(SETTLE_MS)
   await page.mouse.up()
 }
 
+/** Взять кликом, перенести плавно без зажатой кнопки и положить вторым кликом. */
+export async function drag(page: Page, from: Point, to: Point): Promise<void> {
+  await page.mouse.move(from.x, from.y)
+  await click(page)
+  await glide(page, from, to)
+  await wait(SETTLE_MS)
+  await click(page)
+}
+
 /**
- * Взять и резко махнуть в сторону, отпуская на ходу. Сторона выбирается сама — та, где
+ * Взять кликом, резко махнуть в сторону и кликнуть на ходу. Сторона выбирается сама — та, где
  * до края больше места: бросок удаляет элемент независимо от направления.
  */
 export async function fling(page: Page, from: Point): Promise<void> {
@@ -72,13 +79,13 @@ export async function fling(page: Page, from: Point): Promise<void> {
   const dx = toRight >= -toLeft ? toRight : toLeft
   if (Math.abs(dx) < THROW_MIN_PX) throw new Error(`no room to fling from x=${Math.round(from.x)}`)
   await page.mouse.move(from.x, from.y)
-  await page.mouse.down()
+  await click(page)
   await wait(SETTLE_MS)
   for (let i = 1; i <= THROW_STEPS; i++) {
     await page.mouse.move(from.x + (dx * i) / THROW_STEPS, from.y)
     await wait(THROW_STEP_MS)
   }
-  await page.mouse.up()
+  await click(page)
 }
 
 /** Задержать открытую ладонь над карманом, пока веер не раскроется. */
@@ -98,7 +105,7 @@ export async function openPocket(page: Page): Promise<void> {
   await wait(FAN_SETTLE_MS)
 }
 
-/** Открыть карман и сжать кулак над карточкой: элемент остаётся в руке. */
+/** Открыть карман и кликнуть по карточке: элемент прилипает к руке. */
 export async function takeFromPocket(page: Page, index = 0): Promise<Point> {
   await openPocket(page)
   const card = page.locator('.pk-fan .pk-card.is-shown').nth(index)
@@ -106,8 +113,20 @@ export async function takeFromPocket(page: Page, index = 0): Promise<Point> {
   const vp = page.viewportSize()
   await glide(page, { x: (vp?.width ?? 0) / 2, y: (vp?.height ?? 0) * 0.95 }, at)
   await wait(SETTLE_MS)
-  await page.mouse.down()
+  await click(page)
   return at
+}
+
+/** Карман забирает элемент через STASH_DWELL_MS над ним, ждём с запасом. */
+const STASH_WAIT_MS = 700
+
+/** Донести элемент в руке до кармана и задержать над ним: он ляжет в карман без жеста. */
+export async function putInPocket(page: Page, from: Point): Promise<void> {
+  const vp = page.viewportSize()
+  if (!vp) throw new Error('no viewport')
+  const spot = { x: from.x, y: vp.height * 0.95 }
+  await glide(page, from, spot)
+  await wait(STASH_WAIT_MS)
 }
 
 /** Удержание Shift с кнопкой дольше POINT_HOLD_MS эмулятора: жест «указать пальцем». */

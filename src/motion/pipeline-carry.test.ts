@@ -69,6 +69,15 @@ describe('processFrame: carrying a stuck element', () => {
     expect(hintCodes(r.events)).toContain('CARRY_THROW_HOW')
   })
 
+  /*
+   * Жест доски рукой с элементом выключен намеренно, но снаружи это неотличимо от поломки:
+   * поза та, рука двигается, доска стоит. Подсказка говорит, что делать — положить.
+   */
+  it('tells to put the element down first when a carrying hand shows a board gesture', () => {
+    const r = run([...PICK, ...still('victory', 30)])
+    expect(hintCodes(r.events)).toContain('CARRY_NAV_BUSY')
+  })
+
   it('pinch and two fingers neither zoom nor pan while carrying', () => {
     const r = run([...PICK, ...still('pinch', 10), ...sweep('pinch', 10, 0.5, 0.01), ...still('victory', 10), ...sweep('victory', 10, 0.6, -0.01)])
     expect(r.events.filter((e) => e.type === 'zoom' || e.type === 'pan')).toEqual([])

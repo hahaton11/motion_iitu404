@@ -63,11 +63,21 @@ export interface PinchFrame {
   readonly pinch: PinchZoomState
   readonly zoom: ZoomEvt | undefined
   readonly nearPinch: NearMiss
+  /** Щипок вели вбок: жест держится, а масштаб не меняется. Для подсказки. */
+  readonly sideways: boolean
 }
 
 /** cursor — курсор, который пользователь видел до этого кадра: центр масштаба. */
 export function pinchFrame(pinch: PinchZoomState, nearAt: number | undefined, i: GestureFrameInput, cursor: Vec2): PinchFrame {
   const active = i.pose === PINCH_POSE && !i.holding
   const r = stepPinchZoom(pinch, { active, steady: i.raw?.label === PINCH_POSE, p: i.motion, cursor })
-  return { pinch: r.state, zoom: r.zoom, nearPinch: nearMiss(nearAt, PINCH_POSE, i) }
+  return { pinch: r.state, zoom: r.zoom, nearPinch: nearMiss(nearAt, PINCH_POSE, i), sideways: r.sideways === true }
 }
+
+/**
+ * Жест доски показан рукой, которая несёт элемент. Панорама и зум в этом случае выключены
+ * намеренно — иначе доска уезжала бы из-под переносимого элемента, — но снаружи это выглядит
+ * как сломанный жест: поза та, а доска стоит. Отсюда подсказка.
+ */
+export const navLocked = (i: GestureFrameInput): boolean =>
+  i.holding && (i.pose === PAN_POSE || i.pose === PINCH_POSE)

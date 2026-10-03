@@ -83,6 +83,34 @@ describe('stepHints', () => {
     expect(codes(runFor({ hands: [slow] }, 1000))).toEqual(['CARRY_THROW_SLOW'])
   })
 
+  /*
+   * Щипок вбок не меняет масштаб намеренно: смена формы кисти сдвигает центр ладони, и ход вбок
+   * нельзя отличить от этого сдвига. Снаружи это выглядит как сломанный жест, отсюда подсказка.
+   */
+  it('PINCH_SIDEWAYS when the pinch is led sideways long enough', () => {
+    expect(runFor({ hands: [hand({ pinchSideways: true })] }, 600)).toEqual([])
+    const hs = runFor({ hands: [hand({ pinchSideways: true })] }, 900)
+    expect(codes(hs)).toEqual(['PINCH_SIDEWAYS'])
+    expect(hs[0]!.message).toBe('Веди щипок вверх или вниз: в сторону масштаб не меняется')
+  })
+
+  /*
+   * Рука с элементом доску не двигает: иначе она уезжала бы из-под переносимого элемента.
+   * Подсказка говорит, что делать, — положить, — а не что жест неправильный.
+   */
+  it('CARRY_NAV_BUSY when a carrying hand shows a board gesture', () => {
+    const carrying = hand({ phase: 'carrying', navLocked: true, carry: { carrying: true, swingAt: undefined, slowThrowAt: undefined } })
+    const hs = runFor({ hands: [carrying] }, 1000)
+    expect(codes(hs)).toEqual(['CARRY_NAV_BUSY'])
+    expect(hs[0]!.t).toBeGreaterThanOrEqual(700)
+  })
+
+  /** Сначала то, что человек делает прямо сейчас, и только потом общий совет про перенос. */
+  it('CARRY_NAV_BUSY wins over CARRY_PUT_HOW for a carrying hand with an open palm', () => {
+    const carrying = hand({ phase: 'carrying', navLocked: true, carry: { carrying: true, swingAt: undefined, slowThrowAt: undefined } })
+    expect(codes(runFor({ hands: [carrying] }, 4000))[0]).toBe('CARRY_NAV_BUSY')
+  })
+
   it('HALF_RELEASE in the band while holding', () => {
     expect(codes(runFor({ hands: [hand({ closure: 0.6, phase: 'holding' })] }, 700))).toEqual(['HALF_RELEASE'])
   })

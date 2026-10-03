@@ -7,6 +7,8 @@ import {
   NEAR_PINCH_HINT_MS,
   CARRY_OPEN_HINT_MS,
   CARRY_FLASH_MS,
+  CARRY_NAV_HINT_MS,
+  PINCH_SIDEWAYS_HINT_MS,
   HINT_COOLDOWN_MS,
   HINT_GAP_MS,
   NO_HAND_MS,
@@ -25,14 +27,22 @@ import type { Thresholds, Vec2 } from './types'
  * Подсказки переноса прилипшего элемента. Коды свои, не из контракта: поле `code` подсказки
  * принимает любую строку, а контракт без нужды не меняется.
  */
-export type CarryHintCode = 'CARRY_PUT_HOW' | 'CARRY_THROW_HOW' | 'CARRY_THROW_SLOW'
+export type CarryHintCode = 'CARRY_PUT_HOW' | 'CARRY_THROW_HOW' | 'CARRY_THROW_SLOW' | 'CARRY_NAV_BUSY'
 
-type HintCode = MotionHintCode | CarryHintCode
+/**
+ * Подсказки жестов доски. Общее у них то, что жест распознан правильно, а доска не двигается:
+ * без подсказки это читается как поломка, и человек начинает жестикулировать сильнее.
+ */
+export type NavHintCode = 'PINCH_SIDEWAYS'
+
+type HintCode = MotionHintCode | CarryHintCode | NavHintCode
 
 export const HINT_TEXTS: Readonly<Record<HintCode, Pick<HintEvt, 'message' | 'severity'>>> = {
   CARRY_PUT_HOW: { message: 'Чтобы положить, сожми кулак и быстро раскрой ладонь', severity: 'info' },
   CARRY_THROW_HOW: { message: 'Чтобы выбросить, сожми кулак и раскрой ладонь на ходу', severity: 'info' },
   CARRY_THROW_SLOW: { message: 'Чтобы выбросить, раскрой ладонь сразу после кулака, не задерживая его', severity: 'warn' },
+  CARRY_NAV_BUSY: { message: 'Сначала положи элемент щелчком кулак → ладонь, потом двигай доску', severity: 'info' },
+  PINCH_SIDEWAYS: { message: 'Веди щипок вверх или вниз: в сторону масштаб не меняется', severity: 'info' },
   HALF_GRAB: { message: 'Сожми кулак полностью, чтобы взять', severity: 'warn' },
   HALF_RELEASE: { message: 'Раскрой ладонь шире, чтобы отпустить', severity: 'warn' },
   HALF_PAN: { message: 'Выпрями указательный и средний, остальные согни', severity: 'warn' },
@@ -69,6 +79,10 @@ export interface HintHandInput {
   readonly nearPan?: boolean
   /** Классификатор видит щипок, но неуверенно. */
   readonly nearPinch?: boolean
+  /** Щипок держат и ведут вбок: масштаб от этого не меняется. */
+  readonly pinchSideways?: boolean
+  /** Рука несёт элемент и показывает жест доски: панорама и зум при переносе выключены. */
+  readonly navLocked?: boolean
   /**
    * Рука показывает щипок. Пальцы щипка наполовину согнуты, и по углам это похоже на недожатый
    * кулак: без этого флага зум щипком просил бы «сожми кулак полностью».
@@ -125,7 +139,11 @@ const PRIORITY: readonly HintCode[] = [
   'HALF_PINCH',
   'CARRY_THROW_SLOW',
   'CARRY_THROW_HOW',
+  'CARRY_NAV_BUSY',
   'CARRY_PUT_HOW',
+  // Ниже подсказок переноса: с элементом в руке важнее сказать про сам перенос, а щипок
+  // вбок в этом случае и так ничего не делает по другой причине.
+  'PINCH_SIDEWAYS',
   'MOVING_TOO_FAST',
   'SWIPE_SHORT',
   'SWIPE_DIAGONAL',
@@ -151,6 +169,7 @@ function carryConditions(h: HintHandInput, th: Thresholds, t: number): Condition
     c('CARRY_PUT_HOW', h.phase === 'carrying' && h.closure < th.open, CARRY_OPEN_HINT_MS),
     c('CARRY_THROW_HOW', recent(k?.swingAt, t), 0),
     c('CARRY_THROW_SLOW', recent(k?.slowThrowAt, t), 0),
+    c('CARRY_NAV_BUSY', h.navLocked === true, CARRY_NAV_HINT_MS),
   ]
 }
 
@@ -164,13 +183,14 @@ function handConditions(h: HintHandInput, th: Thresholds, t: number): Condition[
   const inBand = h.closure >= th.open && h.closure <= th.hold
   const holding = isHoldingPhase(h.phase)
   const nearEdge = edgeDistance(h.center) < EDGE_HINT_MARGIN
-  const c = (code: MotionHintCode, active: boolean, holdMs: number): Condition => ({ code, hand: h.hand, active, holdMs })
+  const c = (code: HintCode, active: boolean, holdMs: number): Condition => ({ code, hand: h.hand, active, holdMs })
   return [
     ...carryConditions(h, th, t),
     c('HALF_GRAB', inBand && !holding && h.pinching !== true, HALF_GESTURE_MS),
     c('HALF_RELEASE', inBand && releasing(h), HALF_GESTURE_MS),
     c('HALF_PAN', h.nearPan === true, NEAR_PAN_HINT_MS),
     c('HALF_PINCH', h.nearPinch === true, NEAR_PINCH_HINT_MS),
+    c('PINCH_SIDEWAYS', h.pinchSideways === true, PINCH_SIDEWAYS_HINT_MS),
     c('HAND_NEAR_EDGE', nearEdge, GEOMETRY_HINT_MS),
     // Расстояние считается по размеру ладони, а у края кадра часть точек обрезана и размер
     // завышен: там про расстояние сказать нечего, и советовать отойти — это советовать не то.

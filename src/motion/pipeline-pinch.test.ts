@@ -83,6 +83,16 @@ describe('processFrame: one-hand pinch zoom', () => {
     expect(gestureEventTypes(frames.flat())).toEqual([])
   })
 
+  /*
+   * Жест держится, доска стоит — без подсказки это читается как поломка. Проверяется на всём
+   * конвейере, а не только в чистой функции: флаг идёт от stepPinchZoom через кадр жестов
+   * в детектор подсказок, и разрыв в этой цепочке молчал бы точно так же, как её отсутствие.
+   */
+  it('says to lead the pinch vertically when it is led sideways long enough', () => {
+    const frames = run([...still('open', 6), ...still('pinch', 6), ...sideways('pinch', 45, 0.5, -0.005)])
+    expect(hints(frames.flat())).toContain('PINCH_SIDEWAYS')
+  })
+
   it('zooms around the cursor where the pinch closed, which stays put and is marked zooming', () => {
     const frames = run([...still('open', 6), ...still('pinch', 6), ...vertical('pinch', 15, Y0, -0.004)])
     const before = cursors(frames.slice(0, 6).flat()).pop()!

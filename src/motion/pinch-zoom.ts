@@ -1,5 +1,5 @@
 import type { ZoomEvt } from '../contracts/input'
-import { PINCH_ZOOM_AXIS_RATIO, PINCH_ZOOM_DEAD_ZONE, PINCH_ZOOM_GAIN } from './constants'
+import { PINCH_SIDEWAYS_MIN, PINCH_ZOOM_AXIS_RATIO, PINCH_ZOOM_DEAD_ZONE, PINCH_ZOOM_GAIN } from './constants'
 import type { Vec2 } from './types'
 
 /**
@@ -38,17 +38,25 @@ export interface PinchZoomParams {
   readonly gain: number
   readonly deadZone: number
   readonly axisRatio: number
+  /** Ход вбок от точки отсчёта, с которого движение считается намеренно боковым. */
+  readonly sidewaysMin: number
 }
 
 export const DEFAULT_PINCH_ZOOM: PinchZoomParams = {
   gain: PINCH_ZOOM_GAIN,
   deadZone: PINCH_ZOOM_DEAD_ZONE,
   axisRatio: PINCH_ZOOM_AXIS_RATIO,
+  sidewaysMin: PINCH_SIDEWAYS_MIN,
 }
 
 export interface PinchZoomStep {
   readonly state: PinchZoomState
   readonly zoom?: ZoomEvt
+  /**
+   * Щипок вели вбок, и масштаб от этого не изменился. Для подсказки: без неё жест выглядит
+   * сломанным — человек держит щипок, двигает рукой, а доска стоит.
+   */
+  readonly sideways?: true
 }
 
 const IDLE: PinchZoomState = { anchor: undefined, center: undefined }
@@ -63,8 +71,13 @@ export function stepPinchZoom(s: PinchZoomState, i: PinchZoomInput, p: PinchZoom
   if (!i.steady) return { state: s }
   const dx = i.p.x - s.anchor.x
   const dy = i.p.y - s.anchor.y
-  if (Math.abs(dy) < p.deadZone) return { state: s }
+  // Ход вбок виден и тогда, когда по вертикали рука не двинулась вовсе: именно так и выглядит
+  // попытка «потащить» доску щипком. Точка отсчёта при этом остаётся на месте, и ход
+  // накапливается — иначе боковое движение никогда не дотягивало бы до порога.
+  const sideways = Math.abs(dx) > p.sidewaysMin && Math.abs(dx) > Math.abs(dy) * p.axisRatio
+  if (Math.abs(dy) < p.deadZone) return sideways ? { state: s, sideways: true } : { state: s }
   const moved: PinchZoomState = { anchor: i.p, center: s.center }
+  if (sideways) return { state: moved, sideways: true }
   if (Math.abs(dx) > Math.abs(dy) * p.axisRatio) return { state: moved }
   return { state: moved, zoom: { factor: Math.exp(-dy * p.gain), cx: s.center.x, cy: s.center.y } }
 }

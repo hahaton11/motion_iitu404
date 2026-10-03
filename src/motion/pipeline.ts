@@ -23,7 +23,7 @@ import { DEFAULT_VOTER, initialVoter, MOVING_SPEED, stepVoter, type VoterState }
 import type { Pose } from '../gestures/model'
 import { initialPan, isPanning, type PanState } from './pan'
 import { initialPinchZoom, isPinchZooming, type PinchZoomState } from './pinch-zoom'
-import { NEAR_MISS_MIN, PINCH_POSE, panFrame, pinchFrame, type GestureFrameInput } from './gesture-frames'
+import { NEAR_MISS_MIN, PINCH_POSE, navLocked, panFrame, pinchFrame, type GestureFrameInput } from './gesture-frames'
 import { oneEuro2DStep, oneEuro2DValue, type OneEuro2DState } from './one-euro'
 import { DEFAULT_POINTER, boxToScreen, initialPointer, stepPointer, type PointerBox, type PointerState } from './pointer'
 import { initialTwoHands, stepTwoHands, type HandSnapshot, type TwoHandsState } from './two-hands'
@@ -95,6 +95,10 @@ export interface HandDebug {
   readonly zooming: boolean
   /** Классификатор видит щипок, но неуверенно: для подсказки. */
   readonly nearPinch: boolean
+  /** Щипок ведут вбок, масштаб не меняется: для подсказки. */
+  readonly pinchSideways: boolean
+  /** Рука с элементом показывает жест доски, доска не двигается: для подсказки. */
+  readonly navLocked: boolean
   /** Перенос прилипшего элемента: для подсказок. */
   readonly carry: CarryInfo
 }
@@ -225,6 +229,8 @@ function stepSeen(track: HandTrack, det: HandDetection, t: number, th: Threshold
     nearPan: pf.nearPan.near,
     zooming,
     nearPinch: zf.nearPinch.near,
+    pinchSideways: zf.sideways,
+    navLocked: navLocked(g),
     carry: { carrying: r.state.carry, swingAt: r.state.swingAt, slowThrowAt: r.state.slowThrowAt },
     ...(pose ? { pose } : {}),
   }
@@ -357,6 +363,8 @@ function hintInputs(debug: readonly HandDebug[]): HintHandInput[] {
     score: d.detection.score,
     nearPan: d.nearPan,
     nearPinch: d.nearPinch,
+    pinchSideways: d.pinchSideways,
+    navLocked: d.navLocked,
     pinching: d.pose === PINCH_POSE || d.detection.pose?.label === PINCH_POSE,
     carry: d.carry,
   }))

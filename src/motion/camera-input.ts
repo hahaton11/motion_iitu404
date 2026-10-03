@@ -1,4 +1,4 @@
-import type { InputSource, Unsubscribe } from '../contracts/input'
+import type { HandId, InputSource, Unsubscribe } from '../contracts/input'
 import { InputEmitter } from '../shared/emitter'
 import type { MicAccess } from '../shared/microphone'
 import {
@@ -20,6 +20,7 @@ import { assignHandIds, type RawHand } from './landmarks'
 import {
   initialPipeline,
   processFrame,
+  withCarrying,
   withPointerBox,
   withThresholds,
   type HandDebug,
@@ -142,6 +143,11 @@ export class CameraInput implements InputSource {
 
   get thresholds(): Thresholds {
     return this.pipeline.thresholds
+  }
+
+  /** Потребитель взял элемент в руку или забрал его без жеста. Приходит в том же кадре, что и grab. */
+  setCarrying(hand: HandId, carrying: boolean): void {
+    this.pipeline = withCarrying(this.pipeline, hand, carrying)
   }
 
   setThresholds(th: Thresholds): void {

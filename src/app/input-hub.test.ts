@@ -32,6 +32,14 @@ describe('InputHub', () => {
     expect(board).toHaveBeenCalledTimes(1)
   })
 
+  it('passes the board answer about a carried element to the current source', () => {
+    const hub = new InputHub()
+    const src = Object.assign(new FakeSource(), { setCarrying: vi.fn() })
+    hub.use(src)
+    hub.board.setCarrying?.('left', true)
+    expect(src.setCarrying).toHaveBeenCalledWith('left', true)
+  })
+
   it('hints never reach the board channel', () => {
     const hub = new InputHub()
     const src = new FakeSource()

@@ -108,8 +108,10 @@ class BoardImpl implements Board {
   private readonly disposers: Unsubscribe[] = []
   private seq = 0
   private frame = 0
+  /** Какой руке источник ввода в последний раз сказал, что она несёт элемент. */
+  private carried: HandId | undefined
 
-  constructor(host: HTMLElement, input: InputSource) {
+  constructor(host: HTMLElement, private readonly input: InputSource) {
     this.renderer = new BoardRenderer(host)
     this.layers = { root: this.renderer.root, world: this.renderer.world, overlay: this.renderer.overlay }
     this.cursors = new CursorLayer(this.renderer.overlay)
@@ -231,6 +233,8 @@ class BoardImpl implements Board {
   }
 
   destroy(): void {
+    if (this.carried) this.input.setCarrying?.(this.carried, false)
+    this.carried = undefined
     this.disposers.splice(0).forEach((d) => d())
     cancelAnimationFrame(this.frame)
     this.cursors.destroy()
@@ -268,6 +272,21 @@ class BoardImpl implements Board {
     effects.forEach((fx) => this.runEffect(fx, now, before))
     if (after !== before) this.events.emit('change', after)
     if (after.selectedId !== before.selectedId) this.events.emit('select', { id: after.selectedId })
+    this.syncCarry()
+  }
+
+  /**
+   * Источнику ввода — кто несёт элемент. Камера по этому решает, прилипает ли захват: кулак
+   * на пустом месте отпускается раскрытой ладонью, взятый элемент — только щелчком кулак → ладонь.
+   * Элемент, ушедший из руки без жеста (карман, удаление), освобождает руку и у источника.
+   */
+  private syncCarry(): void {
+    const hand = this.store.state.held?.hand
+    if (hand === this.carried) return
+    const prev = this.carried
+    this.carried = hand
+    if (prev) this.input.setCarrying?.(prev, false)
+    if (hand) this.input.setCarrying?.(hand, true)
   }
 
   /** Эффекты ухода забирают узел до того, как рендер удалит его из DOM. */

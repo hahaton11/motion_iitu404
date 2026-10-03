@@ -1,5 +1,5 @@
 import { createBoard, PALETTE, type Board } from '../board'
-import type { CursorEvt, HintEvt, InputEventMap, InputEventType, InputSource } from '../contracts/input'
+import type { CursorEvt, HandId, HintEvt, InputEventMap, InputEventType, InputSource } from '../contracts/input'
 import { CameraInput } from '../motion'
 import { MouseInput } from '../shared/mouse-input'
 import { createVoice } from '../voice'
@@ -35,6 +35,10 @@ class HalfFistInput implements InputSource {
 
   stop(): void {
     this.inner.stop()
+  }
+
+  setCarrying(hand: HandId, carrying: boolean): void {
+    this.inner.setCarrying?.(hand, carrying)
   }
 }
 

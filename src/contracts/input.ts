@@ -132,4 +132,11 @@ export interface InputSource {
   on<K extends InputEventType>(type: K, fn: (e: InputEventMap[K]) => void): Unsubscribe
   start(): Promise<void>
   stop(): void
+  /**
+   * Необязательная обратная связь от потребителя: держит ли рука элемент. Источник не знает, что
+   * под курсором, а захват прилипает, только когда в руке элемент: пока рука его несёт, раскрытая
+   * ладонь не отпускает, положить можно щелчком кулак → ладонь. false — элемент ушёл из руки без
+   * жеста (карман, удаление): рука свободна, release не нужен. Источники без прилипания не реализуют.
+   */
+  setCarrying?(hand: HandId, carrying: boolean): void
 }

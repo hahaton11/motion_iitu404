@@ -11,12 +11,16 @@ import { InputEmitter } from '../shared/emitter'
 
 const TYPES: readonly InputEventType[] = ['cursor', 'grab', 'release', 'throw', 'point', 'zoom', 'pan', 'swipe', 'handlost', 'hint']
 
-/** Прокси-источник: запуском и остановкой настоящего источника управляет хаб. */
-function proxy(em: InputEmitter): InputSource {
+/**
+ * Прокси-источник: запуском и остановкой настоящего источника управляет хаб.
+ * Ответ потребителя о несомом элементе уходит в текущий источник.
+ */
+function proxy(em: InputEmitter, source: () => InputSource | undefined): InputSource {
   return {
     on: (type, fn) => em.on(type, fn),
     start: async () => undefined,
     stop: () => undefined,
+    setCarrying: (hand, carrying) => source()?.setCarrying?.(hand, carrying),
   }
 }
 
@@ -31,8 +35,8 @@ export class InputHub {
   private readonly hands = new Set<HandId>()
 
   constructor() {
-    this.raw = proxy(this.rawEm)
-    this.board = proxy(this.boardEm)
+    this.raw = proxy(this.rawEm, () => this.source)
+    this.board = proxy(this.boardEm, () => this.source)
   }
 
   get current(): InputSource | undefined {

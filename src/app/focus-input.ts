@@ -1,6 +1,7 @@
 import type { Board } from '../board'
 import type {
   CursorEvt,
+  HandId,
   HintEvt,
   InputEventMap,
   InputEventType,
@@ -85,6 +86,10 @@ export class FocusInput implements InputSource {
 
   stop(): void {
     this.offs.splice(0).forEach((off) => off())
+  }
+
+  setCarrying(hand: HandId, carrying: boolean): void {
+    this.source.setCarrying?.(hand, carrying)
   }
 
   attach(deps: FocusDeps): void {

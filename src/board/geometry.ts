@@ -19,17 +19,57 @@ export interface Rect {
 
 const DEG = Math.PI / 180
 
+/**
+ * Наклон доски и расстояние до зрителя. Те же числа уходят в CSS: слой мира получает
+ * `rotateX(BOARD_TILT_DEG)`, его родитель — `perspective: BOARD_PERSPECTIVE`. Совпадение
+ * обязательно: CSS рисует, а эти функции решают, куда попал прицел. Разойдутся — и курсор
+ * будет брать не тот элемент, который под ним виден.
+ *
+ * CSS rotateX(θ) переводит точку (0, v, 0) в (0, v·cosθ, v·sinθ), а perspective делит
+ * на (D − z). Здесь считается ровно это.
+ */
+export const BOARD_TILT_DEG = 26
+export const BOARD_PERSPECTIVE = 1050
+
+/** Ближе этого к горизонту луч взгляда плоскости уже не достаёт: деление теряет смысл. */
+const HORIZON_EPS = 1e-3
+
 export const normToScreen = (vp: Viewport, nx: number, ny: number): Point => ({ x: nx * vp.w, y: ny * vp.h })
 
-export const worldToScreen = (cam: Camera, vp: Viewport, p: Point): Point => ({
-  x: (p.x - cam.x) * cam.zoom + vp.w / 2,
-  y: (p.y - cam.y) * cam.zoom + vp.h / 2,
-})
+const tiltOf = (cam: Camera): number => (cam.tilt ?? 0) * DEG
 
-export const screenToWorld = (cam: Camera, vp: Viewport, p: Point): Point => ({
-  x: (p.x - vp.w / 2) / cam.zoom + cam.x,
-  y: (p.y - vp.h / 2) / cam.zoom + cam.y,
-})
+/** Масштаб перспективы для точки плоскости, отстоящей от центра камеры на v пикселей по вертикали. */
+const depthScale = (v: number, tilt: number): number => {
+  const d = BOARD_PERSPECTIVE - v * Math.sin(tilt)
+  return d <= HORIZON_EPS ? BOARD_PERSPECTIVE / HORIZON_EPS : BOARD_PERSPECTIVE / d
+}
+
+export function worldToScreen(cam: Camera, vp: Viewport, p: Point): Point {
+  const u = (p.x - cam.x) * cam.zoom
+  const v = (p.y - cam.y) * cam.zoom
+  const tilt = tiltOf(cam)
+  if (tilt === 0) return { x: u + vp.w / 2, y: v + vp.h / 2 }
+  const s = depthScale(v, tilt)
+  return { x: u * s + vp.w / 2, y: v * Math.cos(tilt) * s + vp.h / 2 }
+}
+
+export function screenToWorld(cam: Camera, vp: Viewport, p: Point): Point {
+  const px = p.x - vp.w / 2
+  const py = p.y - vp.h / 2
+  const tilt = tiltOf(cam)
+  if (tilt === 0) return { x: px / cam.zoom + cam.x, y: py / cam.zoom + cam.y }
+  // v выводится из py обращением проекции: py = v·cosθ·D / (D − v·sinθ).
+  const denom = BOARD_PERSPECTIVE * Math.cos(tilt) + py * Math.sin(tilt)
+  const v = (py * BOARD_PERSPECTIVE) / (Math.abs(denom) < HORIZON_EPS ? HORIZON_EPS : denom)
+  const u = px / depthScale(v, tilt)
+  return { x: u / cam.zoom + cam.x, y: v / cam.zoom + cam.y }
+}
+
+/** Во сколько раз элемент в этой точке мира выглядит крупнее или мельче из-за глубины. */
+export function depthAt(cam: Camera, p: Point): number {
+  const tilt = tiltOf(cam)
+  return tilt === 0 ? 1 : depthScale((p.y - cam.y) * cam.zoom, tilt)
+}
 
 /** Точка мира в системе элемента: начало в центре, оси повёрнуты вместе с элементом. */
 export function toLocal(el: BoardElement, p: Point): Point {

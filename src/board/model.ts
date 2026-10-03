@@ -1,4 +1,5 @@
 import type { HandId } from '../contracts/input'
+import { BOARD_TILT_DEG } from './geometry'
 
 export type ElementKind = 'sticky' | 'rect' | 'square' | 'circle' | 'triangle' | 'image'
 
@@ -20,11 +21,15 @@ export interface BoardElement {
   readonly z: number
 }
 
-/** Камера: x, y — мировая точка в центре экрана. */
+/**
+ * Камера: x, y — мировая точка в центре экрана. tilt — наклон плоскости доски в градусах,
+ * ноль или отсутствие даёт прежнюю плоскую проекцию.
+ */
 export interface Camera {
   readonly x: number
   readonly y: number
   readonly zoom: number
+  readonly tilt?: number
 }
 
 /** dx, dy — смещение центра элемента от точки захвата в мировых координатах. */
@@ -86,4 +91,4 @@ export function nextColor(kind: ElementKind, current: string): string {
   return list[(i + 1) % list.length] ?? current
 }
 
-export const emptyState = (): BoardState => ({ elements: [], camera: { x: 0, y: 0, zoom: 1 } })
+export const emptyState = (): BoardState => ({ elements: [], camera: { x: 0, y: 0, zoom: 1, tilt: BOARD_TILT_DEG } })

@@ -31,6 +31,10 @@
   -webkit-user-select: none;
   touch-action: none;
   contain: strict;
+  /* То же число, что BOARD_PERSPECTIVE в geometry.ts. Расходиться им нельзя: CSS рисует
+     проекцию, а geometry решает, куда попал прицел. */
+  perspective: 1050px;
+  perspective-origin: 50% 50%;
 }
 
 /*
@@ -51,34 +55,19 @@
   --depth-zoom: 1;
 }
 
-/* Пол: плоскость, уходящая к горизонту. Линии нарисованы градиентом, а не элементами. */
-.mb-floor {
-  position: absolute;
-  left: -60%;
-  right: -60%;
-  top: 42%;
-  height: 160%;
-  transform: translate3d(calc(var(--px) * 0.45), calc(var(--py) * 0.45), 0) rotateX(74deg);
-  transform-origin: 50% 0;
-  background-image:
-    repeating-linear-gradient(90deg, var(--mb-dot) 0 1px, transparent 1px 110px),
-    repeating-linear-gradient(0deg, var(--mb-dot) 0 1px, transparent 1px 110px);
-  mask-image: linear-gradient(0deg, transparent 0%, #000 22%, #000 55%, transparent 88%);
-  opacity: 0.5;
-}
-
 /* Полоса света на линии горизонта: даёт сцене верх и низ. */
 .mb-horizon {
   position: absolute;
   left: -20%;
   right: -20%;
-  top: 42%;
-  height: 34%;
+  top: 34%;
+  height: 40%;
   transform: translate3d(calc(var(--px) * 0.12), calc(var(--py) * 0.12), 0);
   background:
     radial-gradient(60% 100% at 50% 100%, var(--mb-accent-soft) 0%, transparent 72%),
     linear-gradient(0deg, rgba(90, 209, 255, 0.1) 0%, transparent 70%);
-  opacity: 0.7;
+  mask-image: linear-gradient(0deg, transparent 0%, #000 35%, #000 70%, transparent 100%);
+  opacity: 0.6;
 }
 
 /* Дальняя дымка: почти стоит на месте, поэтому читается как бесконечно далёкая. */
@@ -91,18 +80,25 @@
     radial-gradient(45% 35% at 80% 12%, rgba(90, 209, 255, 0.1) 0%, transparent 70%);
 }
 
+/* Сетка лежит в плоскости доски и наклоняется вместе с ней: размеры здесь в мировых единицах. */
 .mb-grid {
   position: absolute;
   left: 0;
   top: 0;
   transform-origin: 0 0;
-  background-image: radial-gradient(circle at 1.5px 1.5px, var(--mb-dot) 1.2px, transparent 1.6px);
-  background-size: 32px 32px;
-  will-change: transform;
+  background-image: radial-gradient(circle at 50% 50%, var(--mb-grid-dot) 1.4px, transparent 2px);
   pointer-events: none;
-  opacity: 0.75;
+  --mb-grid-dot: rgba(150, 185, 230, 0.42);
+  /* Дальний край растворяется в фоне, иначе у наклонённой плоскости виден её обрез. */
+  mask-image: radial-gradient(closest-side, #000 30%, rgba(0, 0, 0, 0.55) 62%, transparent 100%);
 }
 
+/*
+ * Плоскость доски. Наклон задаётся в renderCamera тем же углом, по которому считает
+ * worldToScreen, а перспектива — родителю ниже. Без transform-style: preserve-3d:
+ * элементы должны лежать В плоскости и сохранять порядок по z-index, а 3D-контекст
+ * заставил бы браузер сортировать их по глубине.
+ */
 .mb-world {
   position: absolute;
   left: 0;
@@ -110,6 +106,7 @@
   width: 0;
   height: 0;
   transform-origin: 0 0;
+  will-change: transform;
 }
 
 .mb-overlay {

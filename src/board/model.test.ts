@@ -45,6 +45,6 @@ describe('nextColor', () => {
 
 describe('emptyState', () => {
   it('has no elements and neutral camera', () => {
-    expect(emptyState()).toEqual({ elements: [], camera: { x: 0, y: 0, zoom: 1 } })
+    expect(emptyState()).toMatchObject({ elements: [], camera: { x: 0, y: 0, zoom: 1 } })
   })
 })

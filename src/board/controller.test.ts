@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { normToScreen, screenToWorld } from './geometry'
 import type { HandId } from '../contracts/input'
 import {
   BOARD_HINTS,
@@ -88,11 +89,18 @@ describe('controller: grab, move, release', () => {
     expect(h.ctrl.hands.right?.mode).toBe('hold')
   })
 
+  /*
+   * Проверяется экранный инвариант, а не мировые координаты: элемент должен оказаться там,
+   * куда человек показывает. Мировая точка под курсором зависит от наклона доски, и сверка
+   * с числом означала бы «доска плоская», а не «элемент следует за рукой».
+   */
   it('held element follows the cursor', () => {
     const h = board()
     h.grab(0.5, 0.5)
     h.cursor(0.6, 0.7, 'right', 1)
-    expect(h.el('a')).toMatchObject({ x: 100, y: 200 })
+    const under = screenToWorld(h.state.camera, vp, normToScreen(vp, 0.6, 0.7))
+    expect(h.el('a')!.x).toBeCloseTo(under.x)
+    expect(h.el('a')!.y).toBeCloseTo(under.y)
   })
 
   it('grab raises the element to the top', () => {
@@ -166,7 +174,7 @@ describe('controller: pan and zoom', () => {
     h.panCursor(0.1, 0.1)
     const r = h.pan(0.1, 0.05)
     expect(r.actions).toEqual([{ type: 'pan', dx: 100, dy: 50 }])
-    expect(h.state.camera).toEqual({ x: -100, y: -50, zoom: 1 })
+    expect(h.state.camera).toMatchObject({ x: -100, y: -50, zoom: 1 })
     expect(h.ctrl.hands.right?.mode).toBe('pan')
   })
 
@@ -204,7 +212,7 @@ describe('controller: pan and zoom', () => {
     h.grab(0.1, 0.1)
     h.cursor(0.3, 0.3, 'right', 1)
     h.release(0.3, 0.3)
-    expect(h.state.camera).toEqual({ x: 0, y: 0, zoom: 1 })
+    expect(h.state.camera).toMatchObject({ x: 0, y: 0, zoom: 1 })
   })
 
   it('dragging a fist on empty space hints to show two fingers, not more often than the cooldown', () => {

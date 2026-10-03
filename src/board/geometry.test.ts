@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { createElement, type BoardElement, type ElementKind } from './model'
 import {
+  BOARD_TILT_DEG,
   clampToView,
+  depthAt,
   containsPoint,
   hitTest,
   normToScreen,
@@ -31,6 +33,66 @@ describe('screen <-> world', () => {
 
   it('normalized input maps to viewport pixels', () => {
     expect(normToScreen(vp, 0.5, 0.25)).toEqual({ x: 500, y: 200 })
+  })
+})
+
+/*
+ * Наклон доски держится на одном свойстве: screenToWorld должен быть точным обратным
+ * к worldToScreen. Пока это так, прицел берёт тот элемент, который под ним виден, —
+ * попадание верно по построению, а не по совпадению. Остальные тесты тут вторичны.
+ */
+describe('tilted board', () => {
+  const tilted = { x: 0, y: 0, zoom: 1, tilt: BOARD_TILT_DEG }
+
+  it('round-trips every point of the visible plane', () => {
+    const cams = [tilted, { x: 120, y: -70, zoom: 0.6, tilt: BOARD_TILT_DEG }, { x: -40, y: 25, zoom: 2.4, tilt: 35 }]
+    for (const cam of cams) {
+      for (let x = -600; x <= 600; x += 150) {
+        for (let y = -400; y <= 400; y += 100) {
+          const back = screenToWorld(cam, vp, worldToScreen(cam, vp, { x, y }))
+          expect(back.x).toBeCloseTo(x, 6)
+          expect(back.y).toBeCloseTo(y, 6)
+        }
+      }
+    }
+  })
+
+  it('round-trips from screen pixels back to the same pixels', () => {
+    for (let sx = 0; sx <= 1000; sx += 125) {
+      for (let sy = 0; sy <= 800; sy += 100) {
+        const back = worldToScreen(tilted, vp, screenToWorld(tilted, vp, { x: sx, y: sy }))
+        expect(back.x).toBeCloseTo(sx, 6)
+        expect(back.y).toBeCloseTo(sy, 6)
+      }
+    }
+  })
+
+  it('keeps the camera point in the middle of the viewport', () => {
+    const cam = { x: 50, y: -20, zoom: 2, tilt: BOARD_TILT_DEG }
+    expect(worldToScreen(cam, vp, { x: 50, y: -20 })).toEqual({ x: 500, y: 400 })
+  })
+
+  it('makes the far half of the board smaller and the near half larger', () => {
+    expect(depthAt(tilted, { x: 0, y: -300 })).toBeLessThan(1)
+    expect(depthAt(tilted, { x: 0, y: 300 })).toBeGreaterThan(1)
+  })
+
+  it('squeezes equal world steps into smaller screen steps as the board recedes', () => {
+    const near = worldToScreen(tilted, vp, { x: 0, y: 300 }).y - worldToScreen(tilted, vp, { x: 0, y: 200 }).y
+    const far = worldToScreen(tilted, vp, { x: 0, y: -200 }).y - worldToScreen(tilted, vp, { x: 0, y: -300 }).y
+    expect(far).toBeGreaterThan(0)
+    expect(far).toBeLessThan(near)
+  })
+
+  it('falls back to the flat projection without a tilt', () => {
+    const flat = { x: 10, y: 20, zoom: 1.5 }
+    expect(worldToScreen(flat, vp, { x: 60, y: 80 })).toEqual(worldToScreen({ ...flat, tilt: 0 }, vp, { x: 60, y: 80 }))
+  })
+
+  it('does not blow up above the horizon', () => {
+    const w = screenToWorld({ x: 0, y: 0, zoom: 1, tilt: 80 }, vp, { x: 500, y: -5000 })
+    expect(Number.isFinite(w.x)).toBe(true)
+    expect(Number.isFinite(w.y)).toBe(true)
   })
 })
 

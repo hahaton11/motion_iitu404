@@ -1,12 +1,14 @@
 import { createNode, div, placeTransform, updateNode, type ElementNode } from './element-view'
-import { worldToScreen, type Viewport } from './geometry'
+import type { Viewport } from './geometry'
 import type { BoardState, Camera } from './model'
 
 /**
- * Насколько слои глубины отстают от камеры. Пол ближе к зрителю и едет почти вместе с доской,
- * дымка дальше всего и почти стоит: разная скорость и даёт ощущение объёма при панораме.
+ * Насколько слои фона отстают от камеры. Глубину теперь держит сама плоскость доски,
+ * а эти два слоя дают ей даль: свет на горизонте отстаёт заметно, дымка почти стоит.
+ * Отдельный декоративный пол убран — он спорил с настоящей наклонённой плоскостью
+ * и давал видимый шов поперёк экрана.
  */
-export const PARALLAX = { floor: 0.45, horizon: 0.12, haze: 0.04 } as const
+export const PARALLAX = { horizon: 0.12, haze: 0.04 } as const
 
 /** Шаг сетки точек в мировых единицах при zoom 1 и допустимый видимый диапазон шага. */
 export const GRID_STEP = 32
@@ -20,6 +22,13 @@ export function gridStep(zoom: number): number {
   while (step >= GRID_MAX_PX) step /= 2
   return step
 }
+
+/**
+ * Во сколько экранов делается сетка внутри плоскости доски. Наклонённая плоскость уходит
+ * к горизонту, и её видно дальше, чем при плоской проекции: трёх экранов хватает,
+ * а больше — лишние пиксели на растеризацию.
+ */
+export const GRID_COVER = 3
 
 const mod = (a: number, n: number): number => ((a % n) + n) % n
 
@@ -36,6 +45,7 @@ export class BoardRenderer {
   private readonly nodes = new Map<string, ElementNode>()
   private readonly pinned = new Set<string>()
   private camera?: Camera
+  private gridSize = 0
   private viewport: Viewport = { w: 0, h: 0 }
   private hovered = new Set<string>()
   private selectedId?: string
@@ -43,11 +53,13 @@ export class BoardRenderer {
   constructor(host: HTMLElement) {
     this.root = Object.assign(document.createElement('div'), { className: 'mb-board' })
     this.depth = Object.assign(document.createElement('div'), { className: 'mb-depth' })
-    this.depth.append(div('mb-floor'), div('mb-horizon'), div('mb-haze'))
+    this.depth.append(div('mb-horizon'), div('mb-haze'))
     this.grid = Object.assign(document.createElement('div'), { className: 'mb-grid' })
     this.world = Object.assign(document.createElement('div'), { className: 'mb-world' })
     this.overlay = Object.assign(document.createElement('div'), { className: 'mb-overlay' })
-    this.root.append(this.depth, this.grid, this.world, this.overlay)
+    // Сетка — ребёнок слоя мира: так наклон и масштаб достаются ей от доски, а не считаются заново.
+    this.world.append(this.grid)
+    this.root.append(this.depth, this.world, this.overlay)
     host.append(this.root)
   }
 
@@ -95,23 +107,40 @@ export class BoardRenderer {
     this.nodes.clear()
   }
 
+  /**
+   * Камера одним трансформом слоя мира. Порядок множителей повторяет то, что считает
+   * `worldToScreen`: сдвиг на камеру, масштаб, наклон, перенос в центр экрана. Перспектива
+   * задана родителю в CSS тем же `BOARD_PERSPECTIVE`, поэтому браузер рисует ровно ту
+   * проекцию, по которой прицел ищет элементы.
+   */
   private renderCamera(cam: Camera, vp: Viewport, resized: boolean): void {
     this.camera = cam
-    const tx = vp.w / 2 - cam.x * cam.zoom
-    const ty = vp.h / 2 - cam.y * cam.zoom
-    this.world.style.transform = `translate3d(${tx}px, ${ty}px, 0) scale(${cam.zoom})`
-    const step = gridStep(cam.zoom)
-    const scale = step / GRID_STEP
-    const origin = worldToScreen(cam, vp, { x: 0, y: 0 })
-    const ox = mod(origin.x, step) - step
-    const oy = mod(origin.y, step) - step
-    if (resized || this.grid.style.width === '') {
-      const minScale = GRID_MIN_PX / GRID_STEP
-      this.grid.style.width = `${(vp.w + 2 * GRID_MAX_PX) / minScale}px`
-      this.grid.style.height = `${(vp.h + 2 * GRID_MAX_PX) / minScale}px`
-    }
-    this.grid.style.transform = `translate3d(${ox}px, ${oy}px, 0) scale(${scale})`
+    const tilt = cam.tilt ?? 0
+    const place = `translate3d(${vp.w / 2}px, ${vp.h / 2}px, 0)`
+    const move = `scale(${cam.zoom}) translate3d(${-cam.x}px, ${-cam.y}px, 0)`
+    this.world.style.transform = tilt === 0 ? `${place} ${move}` : `${place} rotateX(${tilt}deg) ${move}`
+    this.renderGrid(cam, vp, resized)
     this.renderDepth(cam)
+  }
+
+  /**
+   * Сетка лежит внутри плоскости доски, а не на экране: наклон и масштаб ей достаются
+   * от слоя мира даром. Шаг в мировых единицах подбирается так, чтобы на экране точки
+   * не слипались, — та же логика, что была в экранной сетке.
+   */
+  private renderGrid(cam: Camera, vp: Viewport, resized: boolean): void {
+    const stepWorld = gridStep(cam.zoom) / cam.zoom
+    const size = (Math.max(vp.w, vp.h) * GRID_COVER) / cam.zoom
+    if (resized || this.grid.style.width === '' || this.gridSize !== size) {
+      this.gridSize = size
+      this.grid.style.width = `${size}px`
+      this.grid.style.height = `${size}px`
+    }
+    this.grid.style.backgroundSize = `${stepWorld}px ${stepWorld}px`
+    // Начало сетки прижато к шагу, иначе точки ползут относительно мира при панораме.
+    const left = cam.x - size / 2
+    const top = cam.y - size / 2
+    this.grid.style.transform = `translate3d(${left - mod(left, stepWorld)}px, ${top - mod(top, stepWorld)}px, 0)`
   }
 
   /**

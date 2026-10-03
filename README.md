@@ -5,6 +5,10 @@
 
 **Демо: https://hahaton11.github.io/motion_iitu404/**
 
+**Презентация (PDF): https://hahaton11.github.io/motion_iitu404/presentation.pdf**
+
+**Видео работы: https://hahaton11.github.io/motion_iitu404/demo.webm**
+
 Хакатон Admit 2026, кейс «Камера вместо джойстика». Команда **IITU404**.
 
 ---
@@ -46,6 +50,7 @@ npm test             # 551 unit-тест
 npm run build        # tsc --noEmit && vite build
 npx playwright install chromium
 npm run e2e          # смоук-тесты
+npm run deck         # пересобрать презентацию в public/presentation.pdf
 ```
 
 **Требования:** Chrome или Edge, камера, разрешение на камеру и микрофон.

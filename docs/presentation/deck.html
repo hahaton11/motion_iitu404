@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>Motion Board — финал Admit 2026</title>
+    <style>
+      /*
+       * Презентация финала. Верстается как 11 слайдов 1280×720 и печатается в PDF
+       * скриптом scripts/build-deck.mjs. Тема — продуктовая: тот же фон, тот же акцент,
+       * те же приборные подписи, что на экране доски.
+       */
+      :root {
+        --bg: #06090f;
+        --raise: #0c1320;
+        --fg: #e8f1fb;
+        --muted: #8ea3bd;
+        --accent: #5ad1ff;
+        --warn: #ffb45a;
+        --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        --mono: ui-monospace, Menlo, Consolas, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font-family: var(--font);
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      .slide {
+        position: relative;
+        width: 1280px;
+        height: 720px;
+        padding: 56px 72px;
+        overflow: hidden;
+        background:
+          radial-gradient(1100px 620px at 78% -10%, rgba(90, 209, 255, 0.1), transparent 60%),
+          radial-gradient(900px 520px at 8% 110%, rgba(90, 209, 255, 0.07), transparent 62%),
+          var(--bg);
+        page-break-after: always;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .slide:last-child {
+        page-break-after: auto;
+      }
+
+      .kicker {
+        font: 600 13px/1 var(--mono);
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 18px;
+      }
+
+      h1 {
+        font-size: 64px;
+        line-height: 1.05;
+        letter-spacing: -0.02em;
+      }
+
+      h2 {
+        font-size: 38px;
+        line-height: 1.15;
+        letter-spacing: -0.015em;
+        margin-bottom: 22px;
+      }
+
+      p,
+      li {
+        font-size: 20px;
+        line-height: 1.5;
+        color: var(--fg);
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      strong {
+        color: var(--accent);
+        font-weight: 600;
+      }
+
+      .lead {
+        font-size: 24px;
+        line-height: 1.45;
+        color: var(--muted);
+        max-width: 64ch;
+      }
+
+      ul {
+        list-style: none;
+        display: grid;
+        gap: 14px;
+      }
+
+      li {
+        padding-left: 26px;
+        position: relative;
+      }
+
+      li::before {
+        content: '';
+        position: absolute;
+        left: 2px;
+        top: 11px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+
+      .cols {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 40px;
+        flex: 1;
+        align-content: start;
+      }
+
+      .cols.tight {
+        gap: 28px;
+      }
+
+      .card {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+        border: 1px solid rgba(90, 209, 255, 0.2);
+        border-radius: 18px;
+        padding: 22px 24px;
+      }
+
+      .card h3 {
+        font: 600 13px/1 var(--mono);
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 12px;
+      }
+
+      .card p {
+        font-size: 18px;
+        line-height: 1.45;
+        color: var(--muted);
+      }
+
+      .pipe {
+        font: 500 17px/1.9 var(--mono);
+        color: var(--fg);
+        background: rgba(90, 209, 255, 0.07);
+        border: 1px solid rgba(90, 209, 255, 0.22);
+        border-radius: 14px;
+        padding: 18px 22px;
+        white-space: pre-wrap;
+      }
+
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+
+      td,
+      th {
+        text-align: left;
+        padding: 11px 14px;
+        font-size: 18px;
+        border-bottom: 1px solid rgba(142, 163, 189, 0.18);
+        vertical-align: top;
+      }
+
+      th {
+        font: 600 12px/1 var(--mono);
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+
+      td:first-child {
+        color: var(--fg);
+        font-weight: 600;
+        white-space: nowrap;
+      }
+
+      td:last-child {
+        color: var(--muted);
+      }
+
+      .num {
+        font: 700 46px/1 var(--font);
+        color: var(--accent);
+        letter-spacing: -0.02em;
+      }
+
+      .num small {
+        display: block;
+        font: 400 16px/1.4 var(--font);
+        color: var(--muted);
+        margin-top: 8px;
+        letter-spacing: 0;
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 20px;
+        margin-top: 8px;
+      }
+
+      figure {
+        align-self: start;
+        border-radius: 16px;
+        overflow: hidden;
+        border: 1px solid rgba(90, 209, 255, 0.22);
+        background: var(--raise);
+      }
+
+      figure img {
+        display: block;
+        width: 100%;
+      }
+
+      figcaption {
+        font-size: 15px;
+        color: var(--muted);
+        padding: 12px 16px;
+      }
+
+      .foot {
+        margin-top: auto;
+        padding-top: 22px;
+        font: 500 14px/1.5 var(--mono);
+        color: var(--muted);
+        letter-spacing: 0.04em;
+      }
+
+      .title-links {
+        margin-top: 36px;
+        display: grid;
+        gap: 10px;
+        font: 500 18px/1.6 var(--mono);
+        color: var(--accent);
+      }
+
+      .title-links span {
+        color: var(--muted);
+      }
+
+      .hint {
+        border-left: 3px solid var(--accent);
+        padding: 4px 0 4px 18px;
+        font-size: 19px;
+        line-height: 1.5;
+      }
+
+      .hint.bad {
+        border-color: rgba(142, 163, 189, 0.45);
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- 1. Титул -->
+    <section class="slide">
+      <div class="kicker">Admit 2026 · кейс «Камера вместо джойстика» · команда IITU404</div>
+      <div class="cols" style="grid-template-columns: 1fr 1fr; align-items: center; align-content: center; gap: 48px">
+        <div>
+          <h1>Motion&nbsp;Board</h1>
+          <p class="lead" style="margin-top: 22px; font-size: 22px">
+            Пульт, до которого не нужно дотягиваться: доской для брейншторма управляют руками
+            через веб-камеру. Открывается по ссылке в браузере — ничего не ставить,
+            ничего не подключать, никаких ключей и никакого сервера.
+          </p>
+          <div class="title-links" style="margin-top: 28px">
+            <div><span>демо&nbsp;&nbsp;</span>hahaton11.github.io/motion_iitu404</div>
+            <div><span>код&nbsp;&nbsp;&nbsp;</span>github.com/hahaton11/motion_iitu404</div>
+          </div>
+        </div>
+        <figure style="align-self: center">
+          <img src="img/board.png" alt="Доска Motion Board" />
+        </figure>
+      </div>
+      <div class="foot">4 октября 2026 · финал</div>
+    </section>
+
+    <!-- 2. Идея -->
+    <section class="slide">
+      <div class="kicker">1 · Идея</div>
+      <h2>Есть экраны, до которых нельзя дотронуться</h2>
+      <div class="cols">
+        <div>
+          <ul>
+            <li>Хирург у монитора в стерильной зоне.</li>
+            <li>Повар с мокрыми руками, механик в перчатках.</li>
+            <li>Инженер в чистой комнате.</li>
+            <li>Ведущий воркшопа у большой панели перед группой.</li>
+            <li>Класс, где экран один, а рук двадцать, и общая мышь — способ передать простуду.</li>
+          </ul>
+        </div>
+        <div style="display: grid; gap: 20px; align-content: start">
+          <div class="card">
+            <h3>Почему это не «жесты ради жестов»</h3>
+            <p>
+              Мышь недоступна не потому, что жесты моднее, а потому что её физически нет под рукой.
+              Тач-панель на большой экран стоит денег, камера уже встроена в любой ноутбук
+              и стоит ноль.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Почему брейншторм</h3>
+            <p>
+              Это работа стоя и в движении, с крупными объектами: точность попадания в пиксель
+              не нужна, размах руки естественен. Мы оптимизируем не число жестов, а
+              <strong>сколько минут системой можно пользоваться, не устав</strong>.
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="foot">Главное инженерное содержание работы — эргономика, а не число распознанных поз.</div>
+    </section>
+
+    <!-- 3. Как работает управление движениями -->
+    <section class="slide">
+      <div class="kicker">2 · Как работает управление движениями</div>
+      <h2>Конвейер кадра</h2>
+      <div class="pipe">камера → HandLandmarker → признаки в системе координат ладони → фильтр One Euro
+       → kNN → голосование 4 кадра из 6 → машина состояний → событие контракта</div>
+      <div class="cols tight" style="margin-top: 28px">
+        <div class="card">
+          <h3>Признаки в координатах ладони</h3>
+          <p>
+            Не зависят от того, где рука в кадре, как повёрнута и как далеко. Классификатору
+            не приходится учить одну позу во всех положениях.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Модель на живой записи, а не правила</h3>
+          <p>
+            На одних и тех же данных: <strong>94.9 % против 43.2 %</strong> точности, ложные
+            действия на бездействии <strong>11.4 % против 71.4 %</strong>. Правила щипок
+            не видят вообще — recall 0 %.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Класс «бездействие»</h3>
+          <p>
+            Опустить руку и отдохнуть — не выход из приложения. В системах на правилах
+            расслабленная рука неизбежно попадает в какой-нибудь жест.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Неуверенный кадр не голосует</h3>
+          <p>
+            Кадр ниже порога занимает место в окне, но не голосует ни за кого: отсутствие
+            показаний не превращается в показание в пользу покоя.
+          </p>
+        </div>
+      </div>
+      <div class="foot">Своего кода здесь всё, кроме точек руки: MediaPipe даёт landmarks, решения принимаем мы.</div>
+    </section>
+
+    <!-- 4. Жесты -->
+    <section class="slide">
+      <div class="kicker">2 · Жесты</div>
+      <h2>Роли разведены: случайное движение ничего не роняет</h2>
+      <div class="cols" style="grid-template-columns: 1.15fr 0.85fr">
+        <table>
+          <tr>
+            <th>Жест</th>
+            <th>Действие</th>
+          </tr>
+          <tr><td>Кулак</td><td>взять элемент; дальше он прилипает к руке в любой позе</td></tr>
+          <tr><td>Кулак → ладонь</td><td>положить. На резком махе — выбросить</td></tr>
+          <tr><td>Два пальца</td><td>панорама: доска едет за рукой</td></tr>
+          <tr><td>Щипок вверх-вниз</td><td>масштаб вокруг точки, где щипок сомкнулся</td></tr>
+          <tr><td>Указательный + задержка</td><td>кнопка на плашке; на стикере — диктовка голосом</td></tr>
+          <tr><td>Ладонь над карманом</td><td>карман открывается, кулаком достают заготовку</td></tr>
+          <tr><td>Рука в покое</td><td>ничего: курсор на паузе, можно отдохнуть</td></tr>
+        </table>
+        <figure>
+          <img src="img/board.png" alt="Доска с разложенными стикерами" />
+          <figcaption>Челлендж: разобрать поток сообщений по системам за три минуты</figcaption>
+        </figure>
+      </div>
+      <div class="foot">Пока элемент в руке, щипок не зумит, а два пальца не двигают доску: форма кисти при переносе — не команда.</div>
+    </section>
+
+    <!-- 5. Режим «ошибка» -->
+    <section class="slide">
+      <div class="kicker">3 · Режим «ошибка»</div>
+      <h2>Подсказка отвечает на вопрос «что сделать», а не «что не так»</h2>
+      <div class="cols" style="grid-template-columns: 0.95fr 1.05fr">
+        <div style="display: grid; gap: 16px; align-content: start">
+          <div class="hint bad">«Жест не распознан»</div>
+          <div class="hint">«Сожми кулак полностью, чтобы взять»</div>
+          <div class="hint">«Веди щипок вверх или вниз: в сторону масштаб не меняется»</div>
+          <div class="hint">«Сначала положи элемент щелчком кулак → ладонь, потом двигай доску»</div>
+          <p class="muted" style="margin-top: 6px">
+            <strong>45 кодов</strong>, таблица целиком в README.
+          </p>
+        </div>
+        <div style="display: grid; gap: 18px; align-content: start">
+          <div class="card">
+            <h3>Устройство, а не список</h3>
+            <p>
+              Условие должно продержаться заданное время, один код повторяется не чаще раза
+              в 3 секунды. Мигающая подсказка хуже отсутствующей.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Один тост, выбранный по приоритету</h3>
+            <p>
+              Сначала то, что делает недостоверными остальные измерения. Нет руки → мерить нечего.
+              Плохо видно → не верим ничему. Рука у края → точки обрезаны, и расстояние там
+              считать нельзя.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Ложная подсказка хуже отсутствующей</h3>
+            <p>Она сбивает посреди работы, поэтому у каждого условия есть своя выдержка.</p>
+          </div>
+        </div>
+      </div>
+      <div class="foot">Сильный ход на демо: вызвать подсказку намеренно — отойти на два шага или сжать кулак наполовину.</div>
+    </section>
+
+    <!-- 6. Что улучшили -->
+    <section class="slide">
+      <div class="kicker">4 · Что улучшили после первого этапа</div>
+      <h2>Шесть изменений, и ни одно из них не косметика</h2>
+      <table>
+        <tr>
+          <th>Что</th>
+          <th>Зачем</th>
+        </tr>
+        <tr><td>Масштаб одной рукой — щипком</td><td>вторая рука больше не нужна: рука устаёт меньше</td></tr>
+        <tr><td>Панорама двумя пальцами</td><td>доску стало можно двигать, не беря ничего в руку</td></tr>
+        <tr><td>Липкий перенос</td><td>раскрытая ладонь больше не роняет элемент: кладёт только щелчок</td></tr>
+        <tr><td>Объём сцены</td><td>плоскость доски наклонена на 26°, дальний край уходит к горизонту</td></tr>
+        <tr><td>Обучение из семи заданий</td><td>у каждого нового жеста своё задание: жест без задания не находят</td></tr>
+        <tr><td>Подсказки на тупики жестов</td><td>жест показан верно, а доска стоит — снаружи это неотличимо от поломки</td></tr>
+      </table>
+      <div class="foot">Полная история — в коммитах репозитория: каждая правка объяснена замером, а не вкусом.</div>
+    </section>
+
+    <!-- 7. Масштаб щипком -->
+    <section class="slide">
+      <div class="kicker">4 · Главная новая функция</div>
+      <h2>Жест — не класс, а измерение</h2>
+      <div class="cols tight">
+        <div style="display: grid; gap: 18px; align-content: start">
+          <p>
+            Масштаб не может быть меткой: kNN отвечает одной меткой на кадр, а масштаб непрерывен.
+            Поэтому поза только открывает сеанс, а величину даёт геометрия — сомкнул щипок
+            и ведёшь руку вверх, как зум одним пальцем в картах.
+          </p>
+          <div class="pipe" style="font-size: 16px">factor = exp(−dy · gain)</div>
+          <p class="muted">
+            Ход вверх и ход вниз на одно расстояние дают взаимно обратные масштабы, и доска
+            возвращается ровно туда, где была. Это проверяемое свойство, и на него есть тест.
+          </p>
+        </div>
+        <div style="display: grid; gap: 18px; align-content: start">
+          <div class="card">
+            <h3>Главная трудность — не распознать, а не перепутать</h3>
+            <p>
+              Берёт только кулак, щипок не берёт ничего. Замер на отложенной записи:
+              <strong>кулак и щипок не обменялись ни одним кадром</strong> — ошибки щипка уходят
+              только в бездействие, то есть в «не понял», а не в «взял не то».
+            </p>
+          </div>
+          <div class="card">
+            <h3>Два кадра, выброшенных руками</h3>
+            <p>
+              Первый кадр щипка только ставит точку отсчёта — иначе путь, пройденный, пока
+              голосование набирало свои 4 кадра, влетел бы в масштаб скачком. И кадр, где сырая
+              поза уже не щипок, не меняет ничего: смена формы кисти сама сдвигает центр ладони.
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="foot">Ход вбок масштаб не меняет — и на это есть подсказка: жест, который держат верно и который ничего не делает, выглядит поломкой.</div>
+    </section>
+
+    <!-- 8. Обучение -->
+    <section class="slide">
+      <div class="kicker">4 · Обучение</div>
+      <h2>Жест, которому не дали задания, человек не находит</h2>
+      <div class="cols" style="grid-template-columns: 1fr 1fr">
+        <div style="display: grid; gap: 16px; align-content: start">
+          <p>
+            Панорама и зум были в сборке раньше, чем появились шаги обучения, — и в задании
+            про перенос стикера они не встречаются ни разу. Теперь у каждого свой шаг,
+            и шаг кончается не по времени, а по сделанному делу.
+          </p>
+          <div class="card">
+            <h3>Подвинь доску</h3>
+            <p>Метка у правого края: видно, что она есть, и видно, что до центра её надо довезти.</p>
+          </div>
+          <div class="card">
+            <h3>Приблизь доску</h3>
+            <p>
+              Подпись на табличке набрана семью пикселями и в масштабе 1 физически не читается.
+              Шаг засчитывается и цифрой масштаба, и глазами.
+            </p>
+          </div>
+        </div>
+        <figure>
+          <img src="img/pan-step.png" alt="Шаг обучения «Подвинь доску»" />
+          <figcaption>Шаг 3 из 7: метку справа нужно привести в середину экрана</figcaption>
+        </figure>
+      </div>
+      <div class="foot">Шаг навигации засчитывается по камере доски, когда она постояла 420 мс: по одному кадру судить нельзя.</div>
+    </section>
+
+    <!-- 9. Как проверялось -->
+    <section class="slide">
+      <div class="kicker">5 · Как это проверялось</div>
+      <h2>Решения приняты по замерам, а не по ощущениям</h2>
+      <div class="stats">
+        <div class="num">551<small>unit-тест на чистой логике: геометрия, физика, машина состояний, голосование, подсказки</small></div>
+        <div class="num">62 мс<small>на вызов детектора при 1280×720 — и две руки стоят ровно столько же, сколько одна</small></div>
+        <div class="num">94.9 %<small>точность классификатора на отложенной записи против 43.2 % у правил по углам пальцев</small></div>
+        <div class="num">11.4 %<small>ложных действий на бездействии против 71.4 % у правил: система ошибается в сторону покоя</small></div>
+      </div>
+      <div class="cols tight" style="margin-top: 32px">
+        <div class="card">
+          <h3>Смоук в настоящем браузере</h3>
+          <p>
+            Playwright проходит весь путь на эмуляторе жестов мышью и на записанном видео руки,
+            поданном как фейковая веб-камера Chrome.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Замер FPS под нагрузкой</h3>
+          <p>
+            Доска с 50 элементами под непрерывной панорамой и зумом. Так нашлась просадка теней:
+            размытие на каждом элементе давало 41 FPS, градиент только под поднятым — 57.
+          </p>
+        </div>
+      </div>
+      <div class="foot">Отдельный прогон проходит весь продукт целиком и пишет видео — запасное демо, если на показе не встанет камера.</div>
+    </section>
+
+    <!-- 10. Планы -->
+    <section class="slide">
+      <div class="kicker">5 · Планы развития</div>
+      <h2>Куда это растёт</h2>
+      <div class="cols tight">
+        <div class="card">
+          <h3>Поза тела вторым детектором</h3>
+          <p>
+            Архитектура готова: источник точек отделён контрактом событий, а `numPoses` даёт
+            несколько человек в кадре. Упирается в FPS при двух детекторах на кадр — и это
+            измеримо, а не предположение.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Телефон как камера</h3>
+          <p>Фронтальная камера, вертикальный layout: экран тот же, источник ввода тот же.</p>
+        </div>
+        <div class="card">
+          <h3>Совместная доска</h3>
+          <p>
+            Контракт событий один, источник ввода подменяем — второй участник подключается
+            как ещё один источник, а не как переписанный продукт.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Своя модель за четыре минуты</h3>
+          <p>
+            Страница записи датасета уже в репозитории: четыре минуты записи и одна команда
+            переобучают жесты под другого человека.
+          </p>
+        </div>
+      </div>
+      <div class="foot">Шов источника ввода — одна точка стыковки: доска не знает про камеру, камера не знает про доску.</div>
+    </section>
+
+    <!-- 11. Честные ограничения + ссылки -->
+    <section class="slide">
+      <div class="kicker">Честно о границах</div>
+      <h2>Что мы знаем про слабые места</h2>
+      <ul style="margin-bottom: 28px">
+        <li>Модель обучена на одной руке одного человека: под жюри её никто не переобучал.</li>
+        <li>Бездействие иногда читается как щипок — но щипок ничего не берёт, ложного взятия не будет.</li>
+        <li>Голосовой ввод требует Chrome и сети; без него текст готовится заранее мышью.</li>
+        <li>Конвейер упирается в распознавание, а не в камеру: это измерено и названо.</li>
+      </ul>
+      <div class="title-links">
+        <div><span>демо&nbsp;&nbsp;&nbsp;&nbsp;</span>hahaton11.github.io/motion_iitu404</div>
+        <div><span>код&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>github.com/hahaton11/motion_iitu404</div>
+        <div><span>видео&nbsp;&nbsp;&nbsp;</span>hahaton11.github.io/motion_iitu404/demo.webm</div>
+      </div>
+      <div class="foot">Motion Board · команда IITU404 · Admit 2026</div>
+    </section>
+  </body>
+</html>

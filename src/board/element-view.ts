@@ -14,7 +14,7 @@ export interface ElementNode {
   el: BoardElement
 }
 
-const div = (className: string): HTMLElement => Object.assign(document.createElement('div'), { className })
+export const div = (className: string): HTMLElement => Object.assign(document.createElement('div'), { className })
 
 function triangleSvg(): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, 'svg')

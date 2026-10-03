@@ -1,6 +1,12 @@
-import { createNode, placeTransform, updateNode, type ElementNode } from './element-view'
+import { createNode, div, placeTransform, updateNode, type ElementNode } from './element-view'
 import { worldToScreen, type Viewport } from './geometry'
 import type { BoardState, Camera } from './model'
+
+/**
+ * Насколько слои глубины отстают от камеры. Пол ближе к зрителю и едет почти вместе с доской,
+ * дымка дальше всего и почти стоит: разная скорость и даёт ощущение объёма при панораме.
+ */
+export const PARALLAX = { floor: 0.45, horizon: 0.12, haze: 0.04 } as const
 
 /** Шаг сетки точек в мировых единицах при zoom 1 и допустимый видимый диапазон шага. */
 export const GRID_STEP = 32
@@ -25,6 +31,7 @@ export class BoardRenderer {
   readonly root: HTMLElement
   readonly world: HTMLElement
   readonly overlay: HTMLElement
+  private readonly depth: HTMLElement
   private readonly grid: HTMLElement
   private readonly nodes = new Map<string, ElementNode>()
   private readonly pinned = new Set<string>()
@@ -35,10 +42,12 @@ export class BoardRenderer {
 
   constructor(host: HTMLElement) {
     this.root = Object.assign(document.createElement('div'), { className: 'mb-board' })
+    this.depth = Object.assign(document.createElement('div'), { className: 'mb-depth' })
+    this.depth.append(div('mb-floor'), div('mb-horizon'), div('mb-haze'))
     this.grid = Object.assign(document.createElement('div'), { className: 'mb-grid' })
     this.world = Object.assign(document.createElement('div'), { className: 'mb-world' })
     this.overlay = Object.assign(document.createElement('div'), { className: 'mb-overlay' })
-    this.root.append(this.grid, this.world, this.overlay)
+    this.root.append(this.depth, this.grid, this.world, this.overlay)
     host.append(this.root)
   }
 
@@ -102,6 +111,19 @@ export class BoardRenderer {
       this.grid.style.height = `${(vp.h + 2 * GRID_MAX_PX) / minScale}px`
     }
     this.grid.style.transform = `translate3d(${ox}px, ${oy}px, 0) scale(${scale})`
+    this.renderDepth(cam)
+  }
+
+  /**
+   * Параллакс слоёв глубины. Пишутся только две переменные на слой, вся геометрия пола —
+   * статический CSS: перспектива на отдельном слое не трогает отображение мира в экран,
+   * поэтому попадание по элементам считается тем же screenToWorld, что и до объёма.
+   */
+  private renderDepth(cam: Camera): void {
+    const s = this.depth.style
+    s.setProperty('--px', `${-cam.x * cam.zoom}px`)
+    s.setProperty('--py', `${-cam.y * cam.zoom}px`)
+    s.setProperty('--depth-zoom', String(cam.zoom))
   }
 
   private renderElements(state: BoardState): void {

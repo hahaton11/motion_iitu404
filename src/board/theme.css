@@ -33,6 +33,64 @@
   contain: strict;
 }
 
+/*
+ * Глубина сцены. Перспектива живёт только здесь, на декоративном слое под доской:
+ * наклонить сам слой мира нельзя, потому что экран переводится в мировые координаты
+ * плоским screenToWorld, и от наклона рассыпалось бы попадание по элементам.
+ * Слои едут с разной скоростью (--px/--py от камеры) — это и читается как объём.
+ */
+.mb-depth {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  perspective: 900px;
+  perspective-origin: 50% 42%;
+  --px: 0px;
+  --py: 0px;
+  --depth-zoom: 1;
+}
+
+/* Пол: плоскость, уходящая к горизонту. Линии нарисованы градиентом, а не элементами. */
+.mb-floor {
+  position: absolute;
+  left: -60%;
+  right: -60%;
+  top: 42%;
+  height: 160%;
+  transform: translate3d(calc(var(--px) * 0.45), calc(var(--py) * 0.45), 0) rotateX(74deg);
+  transform-origin: 50% 0;
+  background-image:
+    repeating-linear-gradient(90deg, var(--mb-dot) 0 1px, transparent 1px 110px),
+    repeating-linear-gradient(0deg, var(--mb-dot) 0 1px, transparent 1px 110px);
+  mask-image: linear-gradient(0deg, transparent 0%, #000 22%, #000 55%, transparent 88%);
+  opacity: 0.5;
+}
+
+/* Полоса света на линии горизонта: даёт сцене верх и низ. */
+.mb-horizon {
+  position: absolute;
+  left: -20%;
+  right: -20%;
+  top: 42%;
+  height: 34%;
+  transform: translate3d(calc(var(--px) * 0.12), calc(var(--py) * 0.12), 0);
+  background:
+    radial-gradient(60% 100% at 50% 100%, var(--mb-accent-soft) 0%, transparent 72%),
+    linear-gradient(0deg, rgba(90, 209, 255, 0.1) 0%, transparent 70%);
+  opacity: 0.7;
+}
+
+/* Дальняя дымка: почти стоит на месте, поэтому читается как бесконечно далёкая. */
+.mb-haze {
+  position: absolute;
+  inset: -10%;
+  transform: translate3d(calc(var(--px) * 0.04), calc(var(--py) * 0.04), 0);
+  background:
+    radial-gradient(50% 40% at 22% 18%, rgba(120, 90, 255, 0.12) 0%, transparent 70%),
+    radial-gradient(45% 35% at 80% 12%, rgba(90, 209, 255, 0.1) 0%, transparent 70%);
+}
+
 .mb-grid {
   position: absolute;
   left: 0;
@@ -42,6 +100,7 @@
   background-size: 32px 32px;
   will-change: transform;
   pointer-events: none;
+  opacity: 0.75;
 }
 
 .mb-world {
@@ -59,13 +118,24 @@
   pointer-events: none;
 }
 
-/* Элемент: обёртка держит позицию и поворот, тело — подъём и наклон. */
+/*
+ * Элемент: обёртка держит позицию и поворот, тело — подъём и наклон.
+ * Перспектива ставится на каждый элемент отдельно, а не на слой мира. На слое мира она требовала бы
+ * transform-style: preserve-3d, а он заводит 3D-контекст, в котором браузер сортирует по глубине
+ * и перестаёт слушать z-index — порядок перекрытия элементов, который ведёт el.z, развалился бы.
+ */
 .mb-el {
   position: absolute;
   left: 0;
   top: 0;
   transform-origin: 50% 50%;
+  perspective: 700px;
   --c: var(--mb-accent);
+  /* Толщина плиты: сплошные тени без размытия, их компоновщик не пересчитывает. */
+  --mb-edge: 0 1px 0 rgba(255, 255, 255, 0.14), 0 2px 0 rgba(0, 0, 0, 0.22), 0 4px 0 rgba(0, 0, 0, 0.18),
+    0 7px 0 rgba(0, 0, 0, 0.12);
+  --mb-edge-lift: 0 1px 0 rgba(255, 255, 255, 0.2), 0 3px 0 rgba(0, 0, 0, 0.26), 0 7px 0 rgba(0, 0, 0, 0.22),
+    0 12px 0 rgba(0, 0, 0, 0.16), 0 18px 0 rgba(0, 0, 0, 0.1);
 }
 
 .mb-shadow,
@@ -153,7 +223,15 @@
     linear-gradient(0deg, rgba(0, 0, 0, 0.1) 0%, transparent 30%),
     var(--c);
   color: #1b1f2a;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.25),
+    var(--mb-edge);
+}
+
+.mb-el.is-lifted[data-kind='sticky'] .mb-body {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.3),
+    var(--mb-edge-lift);
 }
 
 .mb-el[data-kind='sticky'] .mb-shadow,
@@ -177,8 +255,18 @@
   border: 1.5px solid color-mix(in srgb, var(--c) 85%, white 15%);
   box-shadow:
     0 0 18px -6px var(--c),
-    inset 0 0 22px -12px var(--c);
+    inset 0 0 22px -12px var(--c),
+    var(--mb-edge);
   color: var(--mb-fg);
+}
+
+.mb-el.is-lifted[data-kind='rect'] .mb-body,
+.mb-el.is-lifted[data-kind='square'] .mb-body,
+.mb-el.is-lifted[data-kind='circle'] .mb-body {
+  box-shadow:
+    0 0 26px -6px var(--c),
+    inset 0 0 22px -12px var(--c),
+    var(--mb-edge-lift);
 }
 
 .mb-el[data-kind='circle'] .mb-body,

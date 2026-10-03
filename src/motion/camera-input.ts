@@ -1,5 +1,6 @@
 import type { InputSource, Unsubscribe } from '../contracts/input'
 import { InputEmitter } from '../shared/emitter'
+import type { MicAccess } from '../shared/microphone'
 import {
   CALIBRATION_PROMPTS,
   calibrationProgress,
@@ -43,6 +44,10 @@ export interface CameraInputOptions extends TrackerOptions {
   readonly onLoadProgress?: (p: LoadProgress) => void
   /** Запрашиваемый размер кадра. Размер — главная статья расходов распознавания. */
   readonly cameraSize?: CameraSize
+  /** Спросить микрофон вместе с камерой одним окном браузера: нужно голосовому вводу. */
+  readonly withMic?: boolean
+  /** Ответ про микрофон, если он запрашивался. Приходит, как только камера открылась. */
+  readonly onMicAccess?: (access: MicAccess) => void
 }
 
 export interface FrameInfo {
@@ -100,7 +105,10 @@ export class CameraInput implements InputSource {
     const meter = new LoadMeter(this.opts.onLoadProgress)
     const model = GestureClassifier.load(GESTURE_MODEL_PATH, (url) => meter.fetch('gestures', url)).catch(() => undefined)
     const [stream, tracker, classifier] = await Promise.all([
-      openCamera(this.videoEl, this.opts.cameraSize),
+      openCamera(this.videoEl, this.opts.cameraSize, this.opts.withMic).then((got) => {
+        if (got.mic) this.opts.onMicAccess?.(got.mic)
+        return got.stream
+      }),
       HandTracker.create({ ...this.opts, meter }),
       model,
     ]).catch((err: unknown) => {

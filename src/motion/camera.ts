@@ -1,3 +1,4 @@
+import { dropAudio, micAccessFromError, type GetUserMedia, type MicAccess } from '../shared/microphone'
 import { CAMERA_FPS, CAMERA_HEIGHT, CAMERA_WIDTH } from './constants'
 
 /** Доступ к фронтальной камере. Ошибки переводятся в понятный текст с действием. */
@@ -63,22 +64,44 @@ export const cameraConstraints = (s: CameraSize = DEFAULT_CAMERA_SIZE): MediaStr
 
 export const CAMERA_CONSTRAINTS: MediaStreamConstraints = cameraConstraints()
 
+export interface CameraStream {
+  readonly stream: MediaStream
+  /** Ответ про микрофон. Нет, если микрофон не спрашивали. */
+  readonly mic?: MicAccess
+}
+
+/**
+ * Камера, а с withMic ещё и микрофон одним запросом: браузер покажет одно окно на оба.
+ * Звук сразу останавливается. Если общий запрос не прошёл, камера просится отдельно,
+ * чтобы отказ в микрофоне не выключил её. Ошибку камеры бросает как есть.
+ */
+export async function acquireCamera(gum: GetUserMedia, video: MediaStreamConstraints, withMic: boolean): Promise<CameraStream> {
+  if (!withMic) return { stream: await gum(video) }
+  try {
+    return { stream: dropAudio(await gum({ ...video, audio: true })), mic: 'granted' }
+  } catch (err) {
+    const stream = await gum(video)
+    return { stream, mic: micAccessFromError(err) }
+  }
+}
+
 /** Включает камеру и запускает видео. Бросает CameraError. */
-export async function openCamera(video: HTMLVideoElement, size?: CameraSize): Promise<MediaStream> {
+export async function openCamera(video: HTMLVideoElement, size?: CameraSize, withMic = false): Promise<CameraStream> {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new CameraError(window.isSecureContext ? 'unsupported' : 'insecure')
   }
-  let stream: MediaStream
+  const md = navigator.mediaDevices
+  let got: CameraStream
   try {
-    stream = await navigator.mediaDevices.getUserMedia(cameraConstraints(size))
+    got = await acquireCamera((c) => md.getUserMedia(c), cameraConstraints(size), withMic)
   } catch (err) {
     throw new CameraError(cameraErrorCode(err), err)
   }
-  video.srcObject = stream
+  video.srcObject = got.stream
   video.muted = true
   video.playsInline = true
   await video.play()
-  return stream
+  return got
 }
 
 export function closeCamera(stream: MediaStream | undefined, video?: HTMLVideoElement): void {

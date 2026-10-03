@@ -30,6 +30,12 @@ export function gridStep(zoom: number): number {
  */
 export const GRID_COVER = 3
 
+/** Сколько держится подпись масштаба после того, как доска перестала масштабироваться. */
+export const ZOOM_LABEL_MS = 1100
+
+/** Подпись масштаба: 1 — «100 %». Доля экрана здесь ни при чём, это масштаб доски. */
+export const zoomLabel = (zoom: number): string => `${Math.round(zoom * 100)} %`
+
 const mod = (a: number, n: number): number => ((a % n) + n) % n
 
 /**
@@ -44,6 +50,8 @@ export class BoardRenderer {
   private readonly grid: HTMLElement
   private readonly nodes = new Map<string, ElementNode>()
   private readonly pinned = new Set<string>()
+  private readonly zoomLabelNode: HTMLElement
+  private zoomLabelTimer: ReturnType<typeof setTimeout> | undefined
   private camera?: Camera
   private gridSize = 0
   private viewport: Viewport = { w: 0, h: 0 }
@@ -59,6 +67,8 @@ export class BoardRenderer {
     this.overlay = Object.assign(document.createElement('div'), { className: 'mb-overlay' })
     // Сетка — ребёнок слоя мира: так наклон и масштаб достаются ей от доски, а не считаются заново.
     this.world.append(this.grid)
+    this.zoomLabelNode = div('mb-zoom')
+    this.overlay.append(this.zoomLabelNode)
     this.root.append(this.depth, this.world, this.overlay)
     host.append(this.root)
   }
@@ -103,8 +113,21 @@ export class BoardRenderer {
   }
 
   destroy(): void {
+    clearTimeout(this.zoomLabelTimer)
     this.root.remove()
     this.nodes.clear()
+  }
+
+  /**
+   * Подпись масштаба на время самого масштабирования. Зум щипком идёт без опоры: рука ведёт
+   * вверх, доска растёт, и сказать, где ты сейчас, нечем. Цифра отвечает на это и уходит,
+   * чтобы не висеть над доской всё остальное время.
+   */
+  private showZoomLabel(zoom: number): void {
+    this.zoomLabelNode.textContent = zoomLabel(zoom)
+    this.zoomLabelNode.classList.add('is-on')
+    clearTimeout(this.zoomLabelTimer)
+    this.zoomLabelTimer = setTimeout(() => this.zoomLabelNode.classList.remove('is-on'), ZOOM_LABEL_MS)
   }
 
   /**
@@ -114,7 +137,9 @@ export class BoardRenderer {
    * проекцию, по которой прицел ищет элементы.
    */
   private renderCamera(cam: Camera, vp: Viewport, resized: boolean): void {
+    const prev = this.camera
     this.camera = cam
+    if (prev && prev.zoom !== cam.zoom) this.showZoomLabel(cam.zoom)
     const tilt = cam.tilt ?? 0
     const place = `translate3d(${vp.w / 2}px, ${vp.h / 2}px, 0)`
     const move = `scale(${cam.zoom}) translate3d(${-cam.x}px, ${-cam.y}px, 0)`

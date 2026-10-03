@@ -116,6 +116,34 @@
 }
 
 /*
+ * Подпись масштаба в углу: видна, пока доска масштабируется, и уходит следом за жестом.
+ * Набрана теми же приборными буквами, что подписи зон, — это служебная разметка экрана,
+ * а не содержимое, которое двигают руками.
+ */
+.mb-zoom {
+  position: absolute;
+  top: 26px;
+  right: 26px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--mb-accent) 35%, transparent);
+  background: color-mix(in srgb, var(--mb-bg) 70%, transparent);
+  font: 600 14px/1 ui-monospace, Menlo, Consolas, monospace;
+  letter-spacing: 0.12em;
+  color: var(--mb-accent);
+  opacity: 0;
+  transform: translateY(-6px);
+  transition:
+    opacity 240ms ease,
+    transform 240ms ease;
+}
+
+.mb-zoom.is-on {
+  opacity: 1;
+  transform: none;
+}
+
+/*
  * Элемент: обёртка держит позицию и поворот, тело — подъём и наклон.
  * Перспектива ставится на каждый элемент отдельно, а не на слой мира. На слое мира она требовала бы
  * transform-style: preserve-3d, а он заводит 3D-контекст, в котором браузер сортирует по глубине
@@ -207,7 +235,14 @@
   font-weight: 600;
   line-height: 1.25;
   text-align: center;
-  overflow-wrap: anywhere;
+  /*
+   * `anywhere` рвал слова посреди корня при полной строке свободного места: «Ретранслят/ор».
+   * `break-word` переносит слово целиком, пока оно помещается в строку, и рвёт только то,
+   * что не помещается никак. Длинное слово при этом делится по слогам с настоящим переносом:
+   * язык страницы — русский, и расстановку делает сам браузер.
+   */
+  overflow-wrap: break-word;
+  hyphens: auto;
   overflow: hidden;
   max-height: 100%;
 }

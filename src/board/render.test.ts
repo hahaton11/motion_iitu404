@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { GRID_MAX_PX, GRID_MIN_PX, GRID_STEP, gridStep } from './render'
+import { GRID_MAX_PX, GRID_MIN_PX, GRID_STEP, gridStep, zoomLabel } from './render'
+
+describe('zoomLabel', () => {
+  it('shows the board scale in whole percent', () => {
+    expect(zoomLabel(1)).toBe('100 %')
+    expect(zoomLabel(1.638)).toBe('164 %')
+    expect(zoomLabel(0.25)).toBe('25 %')
+  })
+})
 
 describe('gridStep', () => {
   it('equals the base step at zoom 1', () => {

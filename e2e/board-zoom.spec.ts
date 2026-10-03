@@ -44,6 +44,9 @@ test('mouse: Alt-drag up zooms in, down zooms out, over an element nothing is ta
   await altDrag(page, over, { x: over.x, y: over.y - 200 })
   const zoomedIn = await camera(page)
   expect(zoomedIn.zoom).toBeGreaterThan(start.zoom * 1.5)
+  // Пока доска масштабируется, в углу стоит цифра: у зума щипком нет другой опоры.
+  await expect(page.locator('.mb-zoom.is-on')).toHaveText(`${Math.round(zoomedIn.zoom * 100)} %`)
+  await expect(page.locator('.mb-zoom.is-on')).toHaveCount(0, { timeout: 3_000 })
   expect(await held(page)).toBe(false)
   await expect(page.locator('.mb-cursor.is-zoom')).toHaveCount(0)
 

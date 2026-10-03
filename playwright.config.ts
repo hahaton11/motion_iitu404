@@ -23,7 +23,10 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   projects: [
-    { name: 'mouse', testIgnore: /camera-video\.spec\.ts/ },
+    { name: 'mouse', testIgnore: /camera-video\.spec\.ts|walkthrough\.spec\.ts/ },
+    // Прогон по всему функционалу с записью видео и снимками. В смоук не входит: он медленный
+    // нарочно, с паузами на чтение карточек, и нужен ради самой записи — запасного ролика к финалу.
+    { name: 'walkthrough', testMatch: /walkthrough\.spec\.ts/ },
     {
       name: 'camera-video',
       testMatch: /camera-video\.spec\.ts/,

@@ -52,6 +52,8 @@ const INFO: Readonly<Record<string, HintInfo>> = {
 
 const ICON_BY_PREFIX: readonly (readonly [string, GestureIcon])[] = [
   ['TUT_THROW', 'throw'],
+  ['TUT_PAN', 'victory'],
+  ['TUT_ZOOM', 'zoom'],
   ['TUT_PUT', 'pocket'],
   ['TUT_OPEN', 'pocket'],
   ['TUT_VOICE', 'point'],

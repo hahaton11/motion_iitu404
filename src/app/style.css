@@ -734,6 +734,18 @@ body[data-mode='camera'][data-cam][data-screen='calibration'] .app-corner {
   color: var(--mb-muted);
 }
 
+/*
+ * Мелкий шрифт на табличке шага зума. Текст физически нечитаем в масштабе 1 и становится
+ * читаемым к полутора-двум: шаг проверяется не только цифрой масштаба, но и глазами.
+ */
+.app-zone.is-fine .app-zone-note {
+  top: 38px;
+  right: 18px;
+  font-size: 7px;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+}
+
 /* Челлендж и свободная доска */
 .app-ch,
 .app-free {

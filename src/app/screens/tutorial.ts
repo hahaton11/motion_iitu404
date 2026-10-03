@@ -4,18 +4,23 @@ import { el, icon, isolate } from '../dom'
 import {
   currentStep,
   initialTutorial,
+  panCentered,
   progressLabel,
   stepTutorial,
   TUTORIAL_FRAME,
+  TUTORIAL_PAN_TARGET,
   TUTORIAL_STEPS,
+  TUTORIAL_ZOOM_GOAL,
+  TUTORIAL_ZOOM_TARGET,
   type TutorialEvent,
   type TutorialReaction,
   type TutorialState,
+  type TutorialStepId,
 } from '../tutorial'
-import { addDecor, createWorkspace, ensurePresets, workspaceDeps, type Workspace } from '../workspace'
-import { centerIn } from '../zones'
+import { addDecor, createWorkspace, ensurePresets, workspaceDeps, type Decor, type Workspace } from '../workspace'
+import { centerIn, type WorldRect } from '../zones'
 
-/** Обучение: пять шагов на настоящей доске с карманом. Карточка шага сверху, шаг пропускается ладонью. */
+/** Обучение: семь шагов на настоящей доске с карманом. Карточка шага сверху, шаг пропускается ладонью. */
 
 const RESPAWN_MS = 650
 const FINISH_MS = 1400
@@ -23,6 +28,29 @@ const PRACTICE_ID = 'tut-practice'
 /** grab от доски приходит раньше take кармана в том же стеке: такой grab не ошибка. */
 const TAKE_GUARD_MS = 50
 const PRACTICE_SIZE = 160
+/**
+ * Сколько камера должна стоять, чтобы считать движение законченным. Панорама и зум приходят
+ * потоком кадров, и судить по каждому кадру нельзя: подсказка «веди дальше» вылетала бы
+ * посреди движения, а шаг засчитывался бы на первом же кадре, попавшем в цель.
+ */
+const CAMERA_SETTLE_MS = 420
+
+/** Что нарисовано на доске на каждом шаге. Зоны живут в мировом слое и едут вместе с доской. */
+const STEP_DECOR: Readonly<Partial<Record<TutorialStepId, readonly Decor[]>>> = {
+  move: [{ rect: TUTORIAL_FRAME, title: 'Рамка', note: 'опусти стикер сюда', tone: 'accent' }],
+  pan: [{ rect: TUTORIAL_PAN_TARGET, title: 'Метка', note: 'приведи её в середину экрана', tone: 'accent' }],
+  zoom: [
+    {
+      rect: TUTORIAL_ZOOM_TARGET,
+      title: 'Табличка',
+      note: 'Щипок вверх приближает доску, вниз — отдаляет. Масштаб растёт вокруг самого щипка',
+      tone: 'accent',
+      fine: true,
+    },
+  ],
+}
+
+const centerOfRect = (r: WorldRect) => ({ x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2 })
 
 interface Card {
   readonly node: HTMLElement
@@ -75,17 +103,39 @@ export function mountTutorial(ctx: AppContext): ScreenHandle {
   let state = initialTutorial()
   let removeFrame: (() => void) | undefined
   let tookAt = -Infinity
+  /** Камера, которую поставил сам экран: такое изменение — не действие человека. */
+  let resetting = false
+  let settle: ReturnType<typeof setTimeout> | undefined
   const timers: ReturnType<typeof setTimeout>[] = []
   const card = stepCard(ctx, () => dispatch({ type: 'skip' }))
   const screen = el('section', 'app-screen is-hud', card.node)
   ctx.layer.append(screen)
 
+  /**
+   * Каждый шаг начинается с доски в нуле: иначе учебный стикер появляется за краем экрана,
+   * а цель шага панорамы оказывается уже в центре.
+   */
+  const resetCamera = () => {
+    clearTimeout(settle)
+    resetting = true
+    ws.board.setCamera({ ...ws.board.getState().camera, x: 0, y: 0, zoom: 1 })
+    resetting = false
+  }
+
+  /** Движение доски закончилось: шаг навигации смотрит, достигнута ли его цель. */
+  const navDone = () => {
+    const step = currentStep(state)
+    if (step?.id === 'pan') dispatch({ type: 'panned', centered: panCentered(ws.board.toScreen(centerOfRect(TUTORIAL_PAN_TARGET))) })
+    if (step?.id === 'zoom') dispatch({ type: 'zoomed', reached: ws.board.getState().camera.zoom >= TUTORIAL_ZOOM_GOAL })
+  }
+
   const enterStep = () => {
     removeFrame?.()
     removeFrame = undefined
-    if (currentStep(state)?.id === 'move') {
-      removeFrame = addDecor(ws.board, [{ rect: TUTORIAL_FRAME, title: 'Рамка', note: 'опусти стикер сюда', tone: 'accent' }])
-    }
+    resetCamera()
+    const id = currentStep(state)?.id
+    const decor = id ? STEP_DECOR[id] : undefined
+    if (decor) removeFrame = addDecor(ws.board, decor)
     spawnPractice(ws, state)
     card.render(state, false)
   }
@@ -110,7 +160,17 @@ export function mountTutorial(ctx: AppContext): ScreenHandle {
     state = r.state
     react(r.reaction, prev)
   }
+  let camera = ws.board.getState().camera
   const offs = [
+    // Панорама и зум не приходят отдельными событиями: доска показывает их камерой.
+    ws.board.subscribe((s) => {
+      if (resetting || s.camera === camera) return
+      camera = s.camera
+      const id = currentStep(state)?.id
+      if (id !== 'pan' && id !== 'zoom') return
+      clearTimeout(settle)
+      settle = setTimeout(navDone, CAMERA_SETTLE_MS)
+    }),
     ws.board.on('grab', () =>
       queueMicrotask(() => {
         if (performance.now() - tookAt > TAKE_GUARD_MS) dispatch({ type: 'grab' })
@@ -132,6 +192,7 @@ export function mountTutorial(ctx: AppContext): ScreenHandle {
   enterStep()
   return {
     destroy: () => {
+      clearTimeout(settle)
       timers.forEach(clearTimeout)
       offs.forEach((off) => off())
       screen.remove()

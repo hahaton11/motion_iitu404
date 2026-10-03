@@ -2,11 +2,15 @@ import type { HintEvt } from '../contracts/input'
 import { rect, type WorldPoint, type WorldRect } from './zones'
 
 /**
- * Обучение из пяти шагов. Каждый шаг ждёт правильного действия, на ошибку отвечает подсказкой.
+ * Обучение из семи шагов. Каждый шаг ждёт правильного действия, на ошибку отвечает подсказкой.
  * Чистый редьюсер: события доски и кармана приходят снаружи, реакция возвращается экрану.
+ *
+ * Шаги идут группами: сначала перенос и бросок — то, что делают с элементом; затем панорама
+ * и зум — то, что делают с самой доской; затем карман и голос. Навигационные жесты вынесены
+ * в свои шаги намеренно: их не на чем показать мимоходом, и без задания их просто не находят.
  */
 
-export type TutorialStepId = 'move' | 'throw' | 'take' | 'put' | 'voice'
+export type TutorialStepId = 'move' | 'throw' | 'pan' | 'zoom' | 'take' | 'put' | 'voice'
 
 /** Иконка жеста для карточки шага и подсказки. */
 export type GestureIcon = 'fist' | 'palm' | 'throw' | 'point' | 'victory' | 'zoom' | 'pocket' | 'voice' | 'hand' | 'light'
@@ -26,6 +30,25 @@ export interface TutorialStep {
 /** Рамка для первого шага, мировые координаты при камере в нуле. */
 export const TUTORIAL_FRAME: WorldRect = rect(120, -170, 440, 110)
 
+/**
+ * Метка для шага панорамы. При камере в нуле она висит у правого края: видно, что она есть,
+ * и видно, что до центра её надо довезти. Одного размаха руки на это хватает.
+ */
+export const TUTORIAL_PAN_TARGET: WorldRect = rect(470, -140, 790, 20)
+
+/** Табличка с мелким текстом для шага зума: в масштабе 1 надпись не читается. */
+export const TUTORIAL_ZOOM_TARGET: WorldRect = rect(-160, -90, 160, 70)
+
+/** Во сколько раз нужно приблизить доску, чтобы шаг зума засчитался. */
+export const TUTORIAL_ZOOM_GOAL = 1.6
+
+/**
+ * Метка приведена в центр: её середина попала в середину экрана с запасом в пятую долю.
+ * Полоса по вертикали шире — наклонённая плоскость сжимает дальний край, и попасть
+ * точно по высоте труднее, чем по ширине.
+ */
+export const panCentered = (p: WorldPoint): boolean => p.x > 0.3 && p.x < 0.7 && p.y > 0.2 && p.y < 0.8
+
 export const TUTORIAL_STEPS: readonly TutorialStep[] = [
   {
     id: 'move',
@@ -44,6 +67,20 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
     icon: 'throw',
     spawn: { x: -40, y: -30 },
     spawnText: 'Выброси меня',
+  },
+  {
+    id: 'pan',
+    title: 'Подвинь доску',
+    instruction: 'Покажи два пальца — указательный и средний — и веди руку в сторону. Доска поедет за рукой: приведи метку справа в центр',
+    note: 'Прицел на время панорамы стоит на месте, и элементы не берутся. С мышью: перетаскивание средней кнопкой или пробел с левой',
+    icon: 'victory',
+  },
+  {
+    id: 'zoom',
+    title: 'Приблизь доску',
+    instruction: 'Сомкни щипок — большой и указательный — и веди руку вверх. Приблизь так, чтобы прочитать мелкую надпись на табличке',
+    note: 'Рука вниз — доска отдаляется. Масштаб растёт вокруг точки, где щипок сомкнулся. С мышью: Alt и перетаскивание вверх',
+    icon: 'zoom',
   },
   {
     id: 'take',
@@ -82,6 +119,18 @@ export const TUTORIAL_HINTS = {
   KEEP_ON_BOARD: { code: 'TUT_KEEP_ON_BOARD', message: 'Перенеси стикер в рамку, а не в карман', severity: 'info' },
   THROW_FASTER: { code: 'TUT_THROW_FASTER', message: 'Махни резче и щёлкни кулаком на ходу, не останавливая руку', severity: 'warn' },
   THROW_NOT_POCKET: { code: 'TUT_THROW_NOT_POCKET', message: 'Брось стикер в сторону: над карманом он сохраняется', severity: 'info' },
+  PAN_TWO_FINGERS: {
+    code: 'TUT_PAN_TWO_FINGERS',
+    message: 'Не сжимай кулак: доску двигают два пальца — указательный и средний',
+    severity: 'warn',
+  },
+  PAN_FARTHER: { code: 'TUT_PAN_FARTHER', message: 'Веди руку дальше, пока метка не окажется в середине экрана', severity: 'info' },
+  ZOOM_PINCH: {
+    code: 'TUT_ZOOM_PINCH',
+    message: 'Не сжимай кулак: масштаб меняет щипок — сомкни большой и указательный',
+    severity: 'warn',
+  },
+  ZOOM_UP: { code: 'TUT_ZOOM_UP', message: 'Веди щипок выше: пока рука идёт вверх, доска приближается', severity: 'info' },
   OPEN_POCKET: { code: 'TUT_OPEN_POCKET', message: 'Задержи открытую ладонь над карманом внизу, чтобы он открылся', severity: 'info' },
   PUT_NO_THROW: { code: 'TUT_PUT_NO_THROW', message: 'Не щёлкай кулаком: поднеси элемент к карману и задержи над ним', severity: 'warn' },
   PUT_LOWER: { code: 'TUT_PUT_LOWER', message: 'Поднеси элемент ниже, к карману внизу экрана, и задержи над ним', severity: 'info' },
@@ -99,6 +148,10 @@ export type TutorialEvent =
   | { readonly type: 'throw' }
   | { readonly type: 'put' }
   | { readonly type: 'take' }
+  /** Панорама остановилась. centered — метка шага оказалась в середине экрана. */
+  | { readonly type: 'panned'; readonly centered: boolean }
+  /** Масштаб перестал меняться. reached — доска приближена не меньше, чем требует шаг. */
+  | { readonly type: 'zoomed'; readonly reached: boolean }
   /** Диктовка в стикер закончилась или голос недоступен, а стикер выбран жестом диктовки. */
   | { readonly type: 'dictated' }
   | { readonly type: 'skip' }
@@ -136,6 +189,9 @@ type Rules = Readonly<Partial<Record<TutorialEvent['type'], TutorialReaction | '
 const RULES: Readonly<Record<TutorialStepId, Rules>> = {
   move: { throw: hint(TUTORIAL_HINTS.NO_THROW, true), put: hint(TUTORIAL_HINTS.KEEP_ON_BOARD, true) },
   throw: { throw: 'ok', drop: hint(TUTORIAL_HINTS.THROW_FASTER), put: hint(TUTORIAL_HINTS.THROW_NOT_POCKET, true) },
+  // Кулак на шаге навигации — самая частая попытка: доску тянут, как мышью.
+  pan: { grab: hint(TUTORIAL_HINTS.PAN_TWO_FINGERS), throw: hint(TUTORIAL_HINTS.PAN_TWO_FINGERS) },
+  zoom: { grab: hint(TUTORIAL_HINTS.ZOOM_PINCH), throw: hint(TUTORIAL_HINTS.ZOOM_PINCH) },
   take: { take: 'ok', grab: hint(TUTORIAL_HINTS.OPEN_POCKET) },
   put: { put: 'ok', throw: hint(TUTORIAL_HINTS.PUT_NO_THROW, true), drop: hint(TUTORIAL_HINTS.PUT_LOWER) },
   voice: { dictated: 'ok', grab: hint(TUTORIAL_HINTS.VOICE_POINT), throw: hint(TUTORIAL_HINTS.VOICE_POINT, true) },
@@ -144,6 +200,10 @@ const RULES: Readonly<Record<TutorialStepId, Rules>> = {
 function ruleFor(step: TutorialStep, e: TutorialEvent): TutorialReaction | 'ok' {
   if (e.type === 'skip') return 'ok'
   if (step.id === 'move' && e.type === 'drop') return e.inFrame ? 'ok' : hint(TUTORIAL_HINTS.DROP_IN_FRAME)
+  // Жест получился, но цель не достигнута: подсказка говорит, что движение надо продолжить,
+  // а не что оно неправильное. Шаг остаётся на месте и ждёт следующей попытки.
+  if (step.id === 'pan' && e.type === 'panned') return e.centered ? 'ok' : hint(TUTORIAL_HINTS.PAN_FARTHER)
+  if (step.id === 'zoom' && e.type === 'zoomed') return e.reached ? 'ok' : hint(TUTORIAL_HINTS.ZOOM_UP)
   return RULES[step.id][e.type] ?? NONE
 }
 

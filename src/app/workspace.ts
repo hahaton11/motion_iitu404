@@ -103,12 +103,14 @@ export interface Decor {
   readonly title: string
   readonly note?: string
   readonly tone: 'accent' | 'danger'
+  /** Подпись мелким шрифтом: в масштабе 1 её не прочитать, это и есть повод приблизить доску. */
+  readonly fine?: boolean
 }
 
 /** Подписанные рамки в мировом слое под элементами: двигаются и масштабируются вместе с доской. */
 export function addDecor(board: Board, items: readonly Decor[]): () => void {
   const nodes = items.map((d) => {
-    const node = el('div', `app-zone is-${d.tone}`, text('div', 'app-zone-title', d.title))
+    const node = el('div', `app-zone is-${d.tone}${d.fine ? ' is-fine' : ''}`, text('div', 'app-zone-title', d.title))
     if (d.note) node.append(text('div', 'app-zone-note', d.note))
     Object.assign(node.style, {
       left: `${d.rect.left}px`,

@@ -4,6 +4,7 @@ import {
   GEOMETRY_HINT_MS,
   HALF_GESTURE_MS,
   NEAR_PAN_HINT_MS,
+  NEAR_PINCH_HINT_MS,
   HINT_COOLDOWN_MS,
   HINT_GAP_MS,
   NO_HAND_MS,
@@ -22,6 +23,7 @@ export const HINT_TEXTS: Readonly<Record<MotionHintCode, Pick<HintEvt, 'message'
   HALF_GRAB: { message: 'Сожми кулак полностью, чтобы взять', severity: 'warn' },
   HALF_RELEASE: { message: 'Раскрой ладонь шире, чтобы отпустить', severity: 'warn' },
   HALF_PAN: { message: 'Выпрями указательный и средний, остальные согни', severity: 'warn' },
+  HALF_PINCH: { message: 'Сомкни кончики большого и указательного, остальные пальцы согни', severity: 'warn' },
   HAND_NEAR_EDGE: { message: 'Рука у края кадра, веди её ближе к центру', severity: 'info' },
   TOO_FAR: { message: 'Подойди на шаг ближе к камере', severity: 'info' },
   TOO_CLOSE: { message: 'Отойди на шаг назад, рука не помещается в кадр', severity: 'info' },
@@ -42,6 +44,13 @@ export interface HintHandInput {
   readonly score: number
   /** Классификатор видит жест двух пальцев, но неуверенно. */
   readonly nearPan?: boolean
+  /** Классификатор видит щипок, но неуверенно. */
+  readonly nearPinch?: boolean
+  /**
+   * Рука показывает щипок. Пальцы щипка наполовину согнуты, и по углам это похоже на недожатый
+   * кулак: без этого флага зум щипком просил бы «сожми кулак полностью».
+   */
+  readonly pinching?: boolean
 }
 
 export interface HintInput {
@@ -89,6 +98,7 @@ const PRIORITY: readonly MotionHintCode[] = [
   'HALF_RELEASE',
   'HALF_GRAB',
   'HALF_PAN',
+  'HALF_PINCH',
   'MOVING_TOO_FAST',
   'SWIPE_SHORT',
   'SWIPE_DIAGONAL',
@@ -107,9 +117,10 @@ function handConditions(h: HintHandInput, th: Thresholds): Condition[] {
   const nearEdge = edgeDistance(h.center) < EDGE_HINT_MARGIN
   const c = (code: MotionHintCode, active: boolean, holdMs: number): Condition => ({ code, hand: h.hand, active, holdMs })
   return [
-    c('HALF_GRAB', inBand && !holding, HALF_GESTURE_MS),
+    c('HALF_GRAB', inBand && !holding && h.pinching !== true, HALF_GESTURE_MS),
     c('HALF_RELEASE', inBand && holding, HALF_GESTURE_MS),
     c('HALF_PAN', h.nearPan === true, NEAR_PAN_HINT_MS),
+    c('HALF_PINCH', h.nearPinch === true, NEAR_PINCH_HINT_MS),
     c('HAND_NEAR_EDGE', nearEdge, GEOMETRY_HINT_MS),
     // Расстояние считается по размеру ладони, а у края кадра часть точек обрезана и размер
     // завышен: там про расстояние сказать нечего, и советовать отойти — это советовать не то.

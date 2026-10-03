@@ -45,6 +45,16 @@ describe('stepHints', () => {
     expect(hs[0]!.hand).toBe('right')
   })
 
+  it('HALF_PINCH when a pinch is seen without confidence', () => {
+    const hs = runFor({ hands: [hand({ nearPinch: true })] }, 900)
+    expect(codes(hs)).toEqual(['HALF_PINCH'])
+    expect(hs[0]!.message).toBe('Сомкни кончики большого и указательного, остальные пальцы согни')
+  })
+
+  it('no HALF_GRAB for a pinch: its half-bent fingers are not a half fist', () => {
+    expect(runFor({ hands: [hand({ closure: 0.6, pinching: true })] }, 2000)).toEqual([])
+  })
+
   it('HALF_RELEASE in the band while holding', () => {
     expect(codes(runFor({ hands: [hand({ closure: 0.6, phase: 'holding' })] }, 700))).toEqual(['HALF_RELEASE'])
   })

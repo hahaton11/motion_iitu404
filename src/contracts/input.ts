@@ -24,6 +24,11 @@ export interface CursorEvt {
    * а курсор стоит на месте. Источники без панорамы поле не заполняют.
    */
   readonly panning?: boolean
+  /**
+   * true — рука держит щипок и зумит доску ходом вверх и вниз, доска масштабируется событиями `zoom`,
+   * а курсор стоит на месте. Источники без зума щипком поле не заполняют.
+   */
+  readonly zooming?: boolean
 }
 
 export interface GrabEvt {
@@ -51,7 +56,10 @@ export interface PointEvt {
   readonly y: number
 }
 
-/** Обе руки в захвате. factor относительно предыдущего события, cx/cy — середина между руками. */
+/**
+ * Масштаб доски. factor относительно предыдущего события. Две руки в захвате: cx/cy — середина между руками.
+ * Щипок одной рукой: cx/cy — точка курсора в момент, когда щипок сомкнулся. Колесо мыши: точка курсора.
+ */
 export interface ZoomEvt {
   readonly factor: number
   readonly cx: number
@@ -94,6 +102,7 @@ export type MotionHintCode =
   | 'SWIPE_SHORT'
   | 'SWIPE_DIAGONAL'
   | 'HALF_PAN'
+  | 'HALF_PINCH'
 
 /** Подсказка режима «ошибка». message — конкретное действие для исправления, на русском. */
 export interface HintEvt {

@@ -27,6 +27,10 @@ export const DUPLICATE_OFFSET = 32
 export const GRIP_HINT_MOVE_PX = 40
 /** Подсказка про два пальца не чаще этого. */
 export const GRIP_HINT_COOLDOWN_MS = 4000
+/** Щипок над элементом стоит без движения дольше этого — человек пытается взять щипком. */
+export const PINCH_GRAB_HINT_MS = 1000
+/** Подсказка «бери кулаком» не чаще этого. */
+export const PINCH_GRAB_HINT_COOLDOWN_MS = 5000
 
 export const BOARD_HINTS = {
   RELEASE_EDGE: { code: 'BOARD_RELEASE_EDGE', message: 'Отпусти элемент над доской, а не за её краем', severity: 'warn' },
@@ -37,6 +41,13 @@ export const BOARD_HINTS = {
   },
   ZOOM_MAX: { code: 'BOARD_ZOOM_MAX', message: 'Сведи руки, чтобы отдалить доску', severity: 'info' },
   ZOOM_MIN: { code: 'BOARD_ZOOM_MIN', message: 'Разведи руки, чтобы приблизить доску', severity: 'info' },
+  ZOOM_MAX_PINCH: { code: 'BOARD_ZOOM_MAX', message: 'Веди щипок вниз, чтобы отдалить доску', severity: 'info' },
+  ZOOM_MIN_PINCH: { code: 'BOARD_ZOOM_MIN', message: 'Веди щипок вверх, чтобы приблизить доску', severity: 'info' },
+  PINCH_GRAB: {
+    code: 'BOARD_PINCH_GRAB',
+    message: 'Чтобы взять элемент, сожми кулак. Щипок с движением вверх или вниз меняет масштаб',
+    severity: 'warn',
+  },
   GRIP_PAN: {
     code: 'BOARD_GRIP_PAN',
     message: 'Чтобы двигать доску, покажи два пальца — указательный и средний',
@@ -46,9 +57,9 @@ export const BOARD_HINTS = {
 
 /**
  * hold — держит элемент. grip — кулак на пустом месте: ничего не делает, но нужен зуму двумя руками.
- * pan — жест двух пальцев, доска едет за рукой.
+ * pan — жест двух пальцев, доска едет за рукой. zoom — щипок, доска масштабируется ходом руки.
  */
-export type HandMode = 'idle' | 'hold' | 'grip' | 'pan'
+export type HandMode = 'idle' | 'hold' | 'grip' | 'pan' | 'zoom'
 
 export interface HandState {
   readonly x: number
@@ -61,6 +72,10 @@ export interface HandState {
   readonly hoverAction?: ToolbarAction
   /** Где кулак сжался на пустом месте, пиксели экрана. */
   readonly gripFrom?: Point
+  /** Элемент под прицелом, когда сомкнулся щипок: возможно, его пытаются взять щипком. */
+  readonly pinchOn?: string
+  /** С какого момента щипок не зумил, мс. */
+  readonly pinchStillSince?: number
 }
 
 export interface ControllerState {
@@ -70,6 +85,8 @@ export interface ControllerState {
   readonly zoomLimit?: 'min' | 'max'
   /** Когда последний раз подсказали, что доску двигают двумя пальцами, а не кулаком. */
   readonly gripHintAt?: number
+  /** Когда последний раз подсказали, что элемент берут кулаком, а не щипком. */
+  readonly pinchHintAt?: number
 }
 
 export type ControllerInput =
@@ -150,6 +167,11 @@ const withoutHover = (h: HandState): HandState => {
   return plain
 }
 
+const withoutPinch = (h: HandState): HandState => {
+  const { pinchOn: _o, pinchStillSince: _s, ...plain } = h
+  return plain
+}
+
 /**
  * Кулак на пустом месте, который тянут, — человек пытается двигать доску по-старому.
  * Подсказка не во время зума двумя кулаками и не чаще GRIP_HINT_COOLDOWN_MS.
@@ -173,10 +195,31 @@ function onCursor(c: ControllerState, e: CursorEvt, ctx: StepContext): StepResul
     return heldBy(ctx.state, e.hand) ? result(next, [{ type: 'dragTo', ...worldAt(ctx, p) }]) : result(next)
   }
   if (prev.mode === 'grip') return gripHint(setHand(c, e.hand, base), e.hand, base, ctx)
-  // Во время панорамы доска едет под курсором, фокус и подсветка выключены.
+  // Во время панорамы и зума доска двигается под курсором, фокус и подсветка выключены.
   if (e.panning === true) return result(setHand(c, e.hand, { ...withoutHover(base), mode: 'pan' }))
-  const free: HandState = prev.mode === 'pan' ? { ...base, mode: 'idle' } : base
+  if (e.zooming === true) return onPinchCursor(c, e.hand, base, p, ctx)
+  const gesture = prev.mode === 'pan' || prev.mode === 'zoom'
+  const free: HandState = gesture ? { ...withoutPinch(base), mode: 'idle' } : base
   return hover(setHand(c, e.hand, free), e.hand, free, p, ctx)
+}
+
+/**
+ * Щипок зумит доску и ничего не берёт. Если он сомкнулся над элементом и стоит без зума дольше
+ * PINCH_GRAB_HINT_MS, человек, скорее всего, пытается взять элемент щипком: подсказка про кулак.
+ */
+function onPinchCursor(c: ControllerState, hand: HandId, base: HandState, p: Point, ctx: StepContext): StepResult {
+  if (base.mode !== 'zoom') {
+    const on = elementAt(ctx, p, base.hoverId)?.id
+    const since = ctx.now !== undefined ? { pinchStillSince: ctx.now } : {}
+    return result(setHand(c, hand, { ...withoutHover(withoutPinch(base)), mode: 'zoom', ...(on ? { pinchOn: on } : {}), ...since }))
+  }
+  const next = setHand(c, hand, base)
+  const now = ctx.now
+  if (!base.pinchOn || now === undefined || base.pinchStillSince === undefined) return result(next)
+  const still = now - base.pinchStillSince >= PINCH_GRAB_HINT_MS
+  const cooled = c.pinchHintAt === undefined || now - c.pinchHintAt >= PINCH_GRAB_HINT_COOLDOWN_MS
+  if (!still || !cooled) return result(next)
+  return result({ ...next, pinchHintAt: now }, [], [{ type: 'hint', hint: BOARD_HINTS.PINCH_GRAB }])
 }
 
 function hover(c: ControllerState, hand: HandId, h: HandState, p: Point, ctx: StepContext): StepResult {
@@ -275,18 +318,35 @@ function onPoint(c: ControllerState, e: PointEvt, ctx: StepContext): StepResult 
   return result(c, [target ? { type: 'select', id: target.id } : { type: 'select' }])
 }
 
+const isFist = (h: HandState | undefined): boolean => h?.mode === 'grip' || h?.mode === 'hold'
+
+/** Щипок зумит: отсчёт «стоит без движения» начинается заново. */
+function pinchMoved(hands: ControllerState['hands'], now: number | undefined): ControllerState['hands'] {
+  if (now === undefined) return hands
+  const entries = Object.entries(hands).map(([k, h]) => [k, h?.mode === 'zoom' ? { ...h, pinchStillSince: now } : h])
+  return Object.fromEntries(entries) as ControllerState['hands']
+}
+
+function limitHint(limit: 'min' | 'max', pinch: boolean): HintEvt {
+  if (pinch) return limit === 'max' ? BOARD_HINTS.ZOOM_MAX_PINCH : BOARD_HINTS.ZOOM_MIN_PINCH
+  return limit === 'max' ? BOARD_HINTS.ZOOM_MAX : BOARD_HINTS.ZOOM_MIN
+}
+
+/** Зум двумя кулаками, щипком одной рукой или колесом. Упор в предел подсказывает, куда вести. */
 function onZoom(c: ControllerState, e: ZoomEvt, ctx: StepContext): StepResult {
   const cam = ctx.state.camera
   const wanted = cam.zoom * e.factor
   const limit = wanted > ZOOM_MAX ? 'max' : wanted < ZOOM_MIN ? 'min' : undefined
-  const twoHands = c.hands.left !== undefined && c.hands.right !== undefined
+  const twoFists = isFist(c.hands.left) && isFist(c.hands.right)
+  const pinch = Object.values(c.hands).some((h) => h?.mode === 'zoom')
   const { zoomLimit: _z, ...plain } = c
-  const next: ControllerState = { ...plain, zooming: c.zooming || twoHands, ...(limit ? { zoomLimit: limit } : {}) }
+  const hands = pinchMoved(c.hands, ctx.now)
+  const next: ControllerState = { ...plain, hands, zooming: c.zooming || twoFists, ...(limit ? { zoomLimit: limit } : {}) }
   const ox = e.cx * ctx.viewport.w - ctx.viewport.w / 2
   const oy = e.cy * ctx.viewport.h - ctx.viewport.h / 2
   const fresh = limit && limit !== c.zoomLimit
-  const hint = limit === 'max' ? BOARD_HINTS.ZOOM_MAX : BOARD_HINTS.ZOOM_MIN
-  return result(next, [{ type: 'zoom', factor: e.factor, ox, oy }], fresh ? [{ type: 'hint', hint }] : [])
+  const effects: BoardEffect[] = fresh ? [{ type: 'hint', hint: limitHint(limit, pinch) }] : []
+  return result(next, [{ type: 'zoom', factor: e.factor, ox, oy }], effects)
 }
 
 function onLost(c: ControllerState, hand: HandId, ctx: StepContext): StepResult {

@@ -5,6 +5,8 @@ import {
   DUPLICATE_OFFSET,
   GRIP_HINT_COOLDOWN_MS,
   initialController,
+  PINCH_GRAB_HINT_COOLDOWN_MS,
+  PINCH_GRAB_HINT_MS,
   step,
   type ControllerInput,
   type ControllerState,
@@ -54,6 +56,12 @@ class Harness {
   }
   panCursor(x: number, y: number, panning = true, hand: HandId = 'right') {
     return this.send({ type: 'cursor', e: { hand, x, y, closure: 0, holding: false, panning } })
+  }
+  pinchCursor(x: number, y: number, zooming = true, hand: HandId = 'right') {
+    return this.send({ type: 'cursor', e: { hand, x, y, closure: 0, holding: false, zooming } })
+  }
+  zoom(factor: number, cx = 0.5, cy = 0.5) {
+    return this.send({ type: 'zoom', e: { factor, cx, cy } })
   }
   point(x: number, y: number) {
     return this.send({ type: 'point', e: { hand: 'right', x, y } })
@@ -248,6 +256,91 @@ describe('controller: pan and zoom', () => {
     h.cursor(0.05, 0.05, 'left', 1)
     h.pan(0.1, 0.1, 'left')
     expect(h.state.camera).toBe(cam)
+  })
+})
+
+describe('controller: one-hand pinch zoom', () => {
+  it('pinch cursor switches the hand to zoom mode and drops the hover', () => {
+    const h = board()
+    h.cursor(0.5, 0.5)
+    h.pinchCursor(0.5, 0.5)
+    expect(h.ctrl.hands.right?.mode).toBe('zoom')
+    expect(h.ctrl.hands.right?.hoverId).toBeUndefined()
+  })
+
+  it('pinch over an element zooms the board and does not take the element', () => {
+    const h = board()
+    h.cursor(0.5, 0.5)
+    h.pinchCursor(0.5, 0.5)
+    const r = h.zoom(1.5)
+    expect(r.actions).toEqual([{ type: 'zoom', factor: 1.5, ox: 0, oy: 0 }])
+    expect(h.state.camera.zoom).toBe(1.5)
+    expect(h.state.held).toBeUndefined()
+  })
+
+  it('the fist over the same element takes it', () => {
+    const h = board()
+    h.cursor(0.5, 0.5)
+    h.grab(0.5, 0.5)
+    expect(h.state.held?.id).toBe('a')
+  })
+
+  it('cursor without the zooming flag ends the pinch zoom', () => {
+    const h = board()
+    h.pinchCursor(0.1, 0.1)
+    h.zoom(1.2)
+    h.cursor(0.1, 0.1)
+    expect(h.ctrl.hands.right?.mode).toBe('idle')
+    expect(h.ctrl.hands.right?.pinchOn).toBeUndefined()
+  })
+
+  it('a still pinch over an element hints to grab with the fist, not more often than the cooldown', () => {
+    const h = board()
+    h.cursor(0.5, 0.5)
+    h.pinchCursor(0.5, 0.5)
+    h.now = PINCH_GRAB_HINT_MS - 100
+    expect(h.pinchCursor(0.5, 0.5).effects).toEqual([])
+    h.now = PINCH_GRAB_HINT_MS
+    expect(h.pinchCursor(0.5, 0.5).effects).toEqual([{ type: 'hint', hint: BOARD_HINTS.PINCH_GRAB }])
+    h.now = PINCH_GRAB_HINT_MS * 3
+    expect(h.pinchCursor(0.5, 0.5).effects).toEqual([])
+    h.now = PINCH_GRAB_HINT_MS + PINCH_GRAB_HINT_COOLDOWN_MS
+    expect(h.pinchCursor(0.5, 0.5).effects).toEqual([{ type: 'hint', hint: BOARD_HINTS.PINCH_GRAB }])
+  })
+
+  it('no grab hint while the pinch is zooming or over empty space', () => {
+    const h = board()
+    h.cursor(0.5, 0.5)
+    h.pinchCursor(0.5, 0.5)
+    h.now = 600
+    h.zoom(1.1)
+    h.now = 1200
+    expect(h.pinchCursor(0.5, 0.5).effects).toEqual([])
+    const empty = board()
+    empty.pinchCursor(0.1, 0.1)
+    empty.now = 5000
+    expect(empty.pinchCursor(0.1, 0.1).effects).toEqual([])
+  })
+
+  it('pinch zoom into the limit hints which way to move the pinch', () => {
+    const h = board()
+    h.pinchCursor(0.5, 0.5)
+    expect(h.zoom(10).effects).toEqual([{ type: 'hint', hint: BOARD_HINTS.ZOOM_MAX_PINCH }])
+    expect(h.state.camera.zoom).toBe(4)
+    expect(h.zoom(1e-3).effects).toEqual([{ type: 'hint', hint: BOARD_HINTS.ZOOM_MIN_PINCH }])
+    expect(h.state.camera.zoom).toBe(0.25)
+    expect(BOARD_HINTS.ZOOM_MAX_PINCH.code).toBe('BOARD_ZOOM_MAX')
+    expect(BOARD_HINTS.ZOOM_MIN_PINCH.code).toBe('BOARD_ZOOM_MIN')
+  })
+
+  it('a pinch zoom with the other hand in view does not suspend the pan afterwards', () => {
+    const h = board()
+    h.cursor(0.9, 0.9, 'left')
+    h.pinchCursor(0.1, 0.1)
+    h.zoom(1.2)
+    expect(h.ctrl.zooming).toBe(false)
+    h.panCursor(0.1, 0.1)
+    expect(h.pan(0.1, 0).actions).toHaveLength(1)
   })
 })
 

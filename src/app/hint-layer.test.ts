@@ -88,7 +88,7 @@ describe('hint layer', () => {
 describe('advice', () => {
   it('known codes have a label, advice and icon', () => {
     expect(hintInfo('HALF_GRAB').icon).toBe('fist')
-    expect(hintInfo('POCKET_STUCK').advice.length).toBeGreaterThan(10)
+    expect(hintInfo('CARRY_PUT_HOW').advice.length).toBeGreaterThan(10)
   })
 
   it('unknown codes fall back to the message and a prefix icon', () => {

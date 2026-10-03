@@ -238,10 +238,11 @@ describe('controller: pan and zoom', () => {
     expect(h.cursor(0.05, 0.05, 'left', 1).effects).toEqual([])
   })
 
-  it('zoom scales around the pivot', () => {
+  it('zoom scales around the pivot and keeps the tilt of the scene', () => {
     const h = board()
+    const tilt = h.state.camera.tilt
     h.send({ type: 'zoom', e: { factor: 2, cx: 0.5, cy: 0.5 } })
-    expect(h.state.camera).toEqual({ x: 0, y: 0, zoom: 2 })
+    expect(h.state.camera).toEqual({ x: 0, y: 0, zoom: 2, tilt })
   })
 
   it('hints once when zoom hits the limit', () => {

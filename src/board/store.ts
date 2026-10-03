@@ -75,13 +75,14 @@ function grab(state: BoardState, a: Extract<BoardAction, { type: 'grab' }>): Boa
   return { ...bringToFront(state, a.id), held: { hand: a.hand, id: a.id, dx: a.dx, dy: a.dy } }
 }
 
+/** Камера пересобирается целиком, поэтому наклон переносится явно: иначе зум расплющивал доску. */
 function zoom(state: BoardState, a: Extract<BoardAction, { type: 'zoom' }>): BoardState {
   const cam = state.camera
   const next = clamp(cam.zoom * a.factor, ZOOM_MIN, ZOOM_MAX)
   if (next === cam.zoom) return state
   const wx = a.ox / cam.zoom + cam.x
   const wy = a.oy / cam.zoom + cam.y
-  return { ...state, camera: { x: wx - a.ox / next, y: wy - a.oy / next, zoom: next } }
+  return { ...state, camera: { ...cam, x: wx - a.ox / next, y: wy - a.oy / next, zoom: next } }
 }
 
 function withoutKey<K extends 'held' | 'selectedId'>(state: BoardState, key: K): BoardState {

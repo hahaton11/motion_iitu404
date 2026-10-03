@@ -120,6 +120,16 @@ describe('reduce: camera', () => {
     const s = reduce(emptyState(), { type: 'setCamera', camera: { x: 0, y: 0, zoom: 1, tilt: 0 } })
     expect(s.camera.tilt).toBe(0)
   })
+
+  /*
+   * Зум пересобирает камеру целиком, и наклон в ней терялся: доска становилась плоской
+   * от любого масштабирования — в обучении ровно на шаге, который учит зуму.
+   */
+  it('zoom keeps the tilt of the scene', () => {
+    const start = emptyState()
+    const s = reduce(start, { type: 'zoom', factor: 2, ox: 100, oy: 50 })
+    expect(s.camera.tilt).toBe(start.camera.tilt)
+  })
 })
 
 describe('history', () => {

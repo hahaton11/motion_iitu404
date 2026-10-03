@@ -302,6 +302,34 @@
   opacity: 0.35;
 }
 
+.mb-cursor::before {
+  content: '';
+  position: absolute;
+  inset: -11px;
+  background: var(--mb-accent);
+  -webkit-mask: var(--mb-move-icon) center / contain no-repeat;
+  mask: var(--mb-move-icon) center / contain no-repeat;
+  opacity: 0;
+  transition: opacity 140ms ease-out;
+  --mb-move-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 4v28M4 18h28M18 4l-4 4M18 4l4 4M18 32l-4-4M18 32l4-4M4 18l4-4M4 18l4 4M32 18l-4-4M32 18l-4 4'/%3E%3C/svg%3E");
+}
+
+/* Панорама двумя пальцами: горошина превращается в крестик перемещения и стоит на месте. */
+.mb-cursor.is-pan {
+  background: transparent;
+  box-shadow: none;
+  opacity: 0.95;
+}
+
+.mb-cursor.is-pan::before {
+  opacity: 1;
+}
+
+.mb-cursor.is-pan::after {
+  opacity: 0.6;
+  transform: scale(1.9);
+}
+
 .mb-cursor.is-hidden {
   opacity: 0;
 }

@@ -3,6 +3,7 @@ import type { HandId } from '../contracts/input'
 import {
   BOARD_HINTS,
   DUPLICATE_OFFSET,
+  GRIP_HINT_COOLDOWN_MS,
   initialController,
   step,
   type ControllerInput,
@@ -21,6 +22,7 @@ class Harness {
   store: BoardStore
   last: StepResult = { ctrl: this.ctrl, actions: [], effects: [] }
   private seq = 0
+  now = 0
 
   constructor(state?: BoardState) {
     this.store = createStore(state)
@@ -31,7 +33,7 @@ class Harness {
   }
 
   send(input: ControllerInput): StepResult {
-    const ctx = { state: this.store.state, viewport: vp, newId: () => `n${++this.seq}` }
+    const ctx = { state: this.store.state, viewport: vp, newId: () => `n${++this.seq}`, now: this.now }
     this.last = step(this.ctrl, input, ctx)
     this.ctrl = this.last.ctrl
     this.store = this.last.actions.reduce(dispatch, this.store)
@@ -46,6 +48,12 @@ class Harness {
   }
   release(x: number, y: number, hand: HandId = 'right', type: 'release' | 'throw' = 'release', vx = 0, vy = 0) {
     return this.send({ type, e: { hand, x, y, vx, vy } })
+  }
+  pan(dx: number, dy: number, hand: HandId = 'right') {
+    return this.send({ type: 'pan', e: { hand, dx, dy } })
+  }
+  panCursor(x: number, y: number, panning = true, hand: HandId = 'right') {
+    return this.send({ type: 'cursor', e: { hand, x, y, closure: 0, holding: false, panning } })
   }
   point(x: number, y: number) {
     return this.send({ type: 'point', e: { hand: 'right', x, y } })
@@ -105,7 +113,7 @@ describe('controller: grab, move, release', () => {
   it('hit-test respects shape: circle corner is empty space', () => {
     const h = board()
     h.grab(0.3 + 0.046, 0.5 - 0.046)
-    expect(h.ctrl.hands.right?.mode).toBe('pan')
+    expect(h.ctrl.hands.right?.mode).toBe('grip')
   })
 
   it('handlost while holding drops the element in place', () => {
@@ -135,7 +143,7 @@ describe('controller: throw', () => {
     expect(h.el('a')).toBeDefined()
   })
 
-  it('throw on empty space only ends panning', () => {
+  it('throw on empty space only ends the grip', () => {
     const h = board()
     h.grab(0.1, 0.1)
     const r = h.release(0.2, 0.1, 'right', 'throw', 5, 0)
@@ -145,15 +153,73 @@ describe('controller: throw', () => {
 })
 
 describe('controller: pan and zoom', () => {
-  it('grab on empty space pans the camera with the hand', () => {
+  it('pan event moves the camera with the hand in screen fractions', () => {
+    const h = board()
+    h.panCursor(0.1, 0.1)
+    const r = h.pan(0.1, 0.05)
+    expect(r.actions).toEqual([{ type: 'pan', dx: 100, dy: 50 }])
+    expect(h.state.camera).toEqual({ x: -100, y: -50, zoom: 1 })
+    expect(h.ctrl.hands.right?.mode).toBe('pan')
+  })
+
+  it('panning cursor switches the hand to pan mode and drops the hover', () => {
+    const h = board()
+    h.cursor(0.5, 0.5)
+    expect(h.ctrl.hands.right?.hoverId).toBe('a')
+    h.panCursor(0.5, 0.5)
+    expect(h.ctrl.hands.right?.mode).toBe('pan')
+    expect(h.ctrl.hands.right?.hoverId).toBeUndefined()
+  })
+
+  it('cursor without the panning flag ends the pan, the camera stays', () => {
+    const h = board()
+    h.panCursor(0.1, 0.1)
+    h.pan(0.1, 0)
+    h.cursor(0.4, 0.4)
+    expect(h.ctrl.hands.right?.mode).toBe('idle')
+    expect(h.state.camera.x).toBe(-100)
+    h.cursor(0.6, 0.6)
+    expect(h.state.camera.x).toBe(-100)
+  })
+
+  it('pan is ignored while the hand holds an element', () => {
+    const h = board()
+    h.grab(0.5, 0.5)
+    const r = h.pan(0.1, 0)
+    expect(r.actions).toEqual([])
+    expect(h.ctrl.hands.right?.mode).toBe('hold')
+  })
+
+  it('fist on empty space does not move the camera', () => {
     const h = board()
     h.cursor(0.1, 0.1)
     h.grab(0.1, 0.1)
-    h.cursor(0.2, 0.15, 'right', 1)
-    expect(h.state.camera).toEqual({ x: -100, y: -50, zoom: 1 })
-    h.release(0.2, 0.15)
-    h.cursor(0.4, 0.4)
-    expect(h.state.camera.x).toBe(-100)
+    h.cursor(0.3, 0.3, 'right', 1)
+    h.release(0.3, 0.3)
+    expect(h.state.camera).toEqual({ x: 0, y: 0, zoom: 1 })
+  })
+
+  it('dragging a fist on empty space hints to show two fingers, not more often than the cooldown', () => {
+    const h = board()
+    h.grab(0.1, 0.1)
+    expect(h.cursor(0.11, 0.1, 'right', 1).effects).toEqual([])
+    expect(h.cursor(0.2, 0.1, 'right', 1).effects).toEqual([{ type: 'hint', hint: BOARD_HINTS.GRIP_PAN }])
+    h.now = 1000
+    expect(h.cursor(0.3, 0.1, 'right', 1).effects).toEqual([])
+    h.release(0.3, 0.1)
+    h.grab(0.1, 0.1)
+    h.now = GRIP_HINT_COOLDOWN_MS + 1
+    expect(h.cursor(0.3, 0.1, 'right', 1).effects).toEqual([{ type: 'hint', hint: BOARD_HINTS.GRIP_PAN }])
+  })
+
+  it('two fists for zoom do not trigger the two-finger hint', () => {
+    const h = board()
+    h.grab(0.1, 0.1, 'left')
+    h.grab(0.9, 0.9, 'right')
+    expect(h.cursor(0.3, 0.3, 'left', 1).effects).toEqual([])
+    h.send({ type: 'zoom', e: { factor: 1.2, cx: 0.5, cy: 0.5 } })
+    h.release(0.9, 0.9, 'right')
+    expect(h.cursor(0.05, 0.05, 'left', 1).effects).toEqual([])
   })
 
   it('zoom scales around the pivot', () => {
@@ -170,16 +236,17 @@ describe('controller: pan and zoom', () => {
     expect(second.effects).toEqual([])
   })
 
-  it('two-hand zoom suspends one-hand pan', () => {
+  it('two-hand zoom suspends pan', () => {
     const h = board()
     h.cursor(0.1, 0.1, 'left')
     h.cursor(0.9, 0.9, 'right')
     h.grab(0.1, 0.1, 'left')
     h.grab(0.9, 0.9, 'right')
-    expect(h.ctrl.hands.right?.mode).toBe('idle')
+    expect(h.ctrl.hands.right?.mode).toBe('grip')
     h.send({ type: 'zoom', e: { factor: 1.5, cx: 0.5, cy: 0.5 } })
     const cam = h.state.camera
     h.cursor(0.05, 0.05, 'left', 1)
+    h.pan(0.1, 0.1, 'left')
     expect(h.state.camera).toBe(cam)
   })
 })

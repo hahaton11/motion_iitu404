@@ -87,7 +87,7 @@ export interface Board {
   destroy(): void
 }
 
-const INPUT_TYPES: readonly InputEventType[] = ['cursor', 'grab', 'release', 'throw', 'point', 'zoom', 'handlost']
+const INPUT_TYPES: readonly InputEventType[] = ['cursor', 'grab', 'release', 'throw', 'point', 'zoom', 'pan', 'handlost']
 
 /** Сдвиг позиции по умолчанию для подряд добавленных элементов, чтобы они не ложились друг на друга. */
 const CASCADE_STEP = 28
@@ -242,7 +242,8 @@ class BoardImpl implements Board {
   private handle(raw: ControllerInput): void {
     const input = this.intercept(raw)
     if (!input) return
-    const r = step(this.ctrl, input, { state: this.store.state, viewport: this.viewport, newId: () => this.newId() })
+    const ctx = { state: this.store.state, viewport: this.viewport, newId: () => this.newId(), now: performance.now() }
+    const r = step(this.ctrl, input, ctx)
     this.ctrl = r.ctrl
     this.apply(r.actions, r.effects)
   }

@@ -4,6 +4,7 @@ import type {
   HandId,
   HandLostEvt,
   HintEvt,
+  PanEvt,
   PointEvt,
   ReleaseEvt,
   ZoomEvt,
@@ -22,6 +23,10 @@ export const EDGE_ZONE = 0.02
 export const KEEP_VISIBLE_PX = 40
 /** Смещение копии при дублировании, мировые единицы. */
 export const DUPLICATE_OFFSET = 32
+/** Кулак на пустом месте, сдвинутый дальше этого, — попытка тянуть доску: подсказка про два пальца. */
+export const GRIP_HINT_MOVE_PX = 40
+/** Подсказка про два пальца не чаще этого. */
+export const GRIP_HINT_COOLDOWN_MS = 4000
 
 export const BOARD_HINTS = {
   RELEASE_EDGE: { code: 'BOARD_RELEASE_EDGE', message: 'Отпусти элемент над доской, а не за её краем', severity: 'warn' },
@@ -32,9 +37,18 @@ export const BOARD_HINTS = {
   },
   ZOOM_MAX: { code: 'BOARD_ZOOM_MAX', message: 'Сведи руки, чтобы отдалить доску', severity: 'info' },
   ZOOM_MIN: { code: 'BOARD_ZOOM_MIN', message: 'Разведи руки, чтобы приблизить доску', severity: 'info' },
+  GRIP_PAN: {
+    code: 'BOARD_GRIP_PAN',
+    message: 'Чтобы двигать доску, покажи два пальца — указательный и средний',
+    severity: 'warn',
+  },
 } as const satisfies Record<string, HintEvt>
 
-export type HandMode = 'idle' | 'hold' | 'pan'
+/**
+ * hold — держит элемент. grip — кулак на пустом месте: ничего не делает, но нужен зуму двумя руками.
+ * pan — жест двух пальцев, доска едет за рукой.
+ */
+export type HandMode = 'idle' | 'hold' | 'grip' | 'pan'
 
 export interface HandState {
   readonly x: number
@@ -45,6 +59,8 @@ export interface HandState {
   readonly engaged?: boolean
   readonly hoverId?: string
   readonly hoverAction?: ToolbarAction
+  /** Где кулак сжался на пустом месте, пиксели экрана. */
+  readonly gripFrom?: Point
 }
 
 export interface ControllerState {
@@ -52,6 +68,8 @@ export interface ControllerState {
   /** Идёт жест двумя руками: панорама одной рукой приостановлена. */
   readonly zooming: boolean
   readonly zoomLimit?: 'min' | 'max'
+  /** Когда последний раз подсказали, что доску двигают двумя пальцами, а не кулаком. */
+  readonly gripHintAt?: number
 }
 
 export type ControllerInput =
@@ -61,6 +79,7 @@ export type ControllerInput =
   | { readonly type: 'throw'; readonly e: ReleaseEvt }
   | { readonly type: 'point'; readonly e: PointEvt }
   | { readonly type: 'zoom'; readonly e: ZoomEvt }
+  | { readonly type: 'pan'; readonly e: PanEvt }
   | { readonly type: 'handlost'; readonly e: HandLostEvt }
   /** Отпускание перехвачено снаружи (карман): снять удержание без анимации падения. */
   | { readonly type: 'consume'; readonly hand: HandId }
@@ -80,6 +99,8 @@ export interface StepContext {
   readonly state: BoardState
   readonly viewport: Viewport
   readonly newId: () => string
+  /** Время в мс для редких подсказок. Без него подсказка про кулак не ограничена по частоте. */
+  readonly now?: number
 }
 
 export interface StepResult {
@@ -124,6 +145,25 @@ function elementAt(ctx: StepContext, p: Point, currentId?: string): BoardElement
   return focusAt(ctx.state.elements, worldAt(ctx, p), FOCUS_RADIUS_PX / z, FOCUS_STICKY_PX / z, currentId)
 }
 
+const withoutHover = (h: HandState): HandState => {
+  const { hoverId: _h, hoverAction: _a, ...plain } = h
+  return plain
+}
+
+/**
+ * Кулак на пустом месте, который тянут, — человек пытается двигать доску по-старому.
+ * Подсказка не во время зума двумя кулаками и не чаще GRIP_HINT_COOLDOWN_MS.
+ */
+function gripHint(c: ControllerState, hand: HandId, h: HandState, ctx: StepContext): StepResult {
+  const from = h.gripFrom
+  const moved = from !== undefined && Math.hypot(h.x - from.x, h.y - from.y) > GRIP_HINT_MOVE_PX
+  const now = ctx.now ?? 0
+  const cooled = c.gripHintAt === undefined || ctx.now === undefined || now - c.gripHintAt >= GRIP_HINT_COOLDOWN_MS
+  const twoFists = handOf(c, other(hand)).mode === 'grip'
+  if (!moved || !cooled || twoFists || c.zooming) return result(c)
+  return result({ ...c, gripHintAt: now }, [], [{ type: 'hint', hint: BOARD_HINTS.GRIP_PAN }])
+}
+
 function onCursor(c: ControllerState, e: CursorEvt, ctx: StepContext): StepResult {
   const prev = handOf(c, e.hand)
   const p = normToScreen(ctx.viewport, e.x, e.y)
@@ -132,29 +172,41 @@ function onCursor(c: ControllerState, e: CursorEvt, ctx: StepContext): StepResul
     const next = setHand(c, e.hand, base)
     return heldBy(ctx.state, e.hand) ? result(next, [{ type: 'dragTo', ...worldAt(ctx, p) }]) : result(next)
   }
-  if (prev.mode === 'pan') {
-    const next = setHand(c, e.hand, base)
-    return c.zooming ? result(next) : result(next, [{ type: 'pan', dx: p.x - prev.x, dy: p.y - prev.y }])
-  }
+  if (prev.mode === 'grip') return gripHint(setHand(c, e.hand, base), e.hand, base, ctx)
+  // Во время панорамы доска едет под курсором, фокус и подсветка выключены.
+  if (e.panning === true) return result(setHand(c, e.hand, { ...withoutHover(base), mode: 'pan' }))
+  const free: HandState = prev.mode === 'pan' ? { ...base, mode: 'idle' } : base
+  return hover(setHand(c, e.hand, free), e.hand, free, p, ctx)
+}
+
+function hover(c: ControllerState, hand: HandId, h: HandState, p: Point, ctx: StepContext): StepResult {
+  const prev = handOf(c, hand)
   const layout = selectedLayout(ctx)
   const hoverAction = layout ? toolbarHit(layout, p) : undefined
   const hoverId = hoverAction ? undefined : elementAt(ctx, p, prev.hoverId)?.id
-  const { hoverId: _h, hoverAction: _a, ...plain } = base
-  return result(setHand(c, e.hand, { ...plain, ...(hoverId ? { hoverId } : {}), ...(hoverAction ? { hoverAction } : {}) }))
+  return result(setHand(c, hand, { ...withoutHover(h), ...(hoverId ? { hoverId } : {}), ...(hoverAction ? { hoverAction } : {}) }))
+}
+
+/** Доска едет за рукой с двумя пальцами. Во время зума двумя руками и при удержании — нет. */
+function onPan(c: ControllerState, e: PanEvt, ctx: StepContext): StepResult {
+  const h = handOf(c, e.hand)
+  if (c.zooming || h.mode === 'hold' || h.mode === 'grip') return result(c)
+  const next = setHand(c, e.hand, { ...withoutHover(h), mode: 'pan' })
+  return result(next, [{ type: 'pan', dx: e.dx * ctx.viewport.w, dy: e.dy * ctx.viewport.h }])
 }
 
 function onGrab(c: ControllerState, e: GrabEvt, ctx: StepContext): StepResult {
   const p = normToScreen(ctx.viewport, e.x, e.y)
   const hand: HandState = { ...handOf(c, e.hand), x: p.x, y: p.y, closure: 1 }
-  const otherBusy = handOf(c, other(e.hand)).mode !== 'idle'
   const layout = selectedLayout(ctx)
   if (layout && toolbarHit(layout, p)) {
     return result(setHand(c, e.hand, { ...hand, mode: 'idle' }), [], [{ type: 'hint', hint: BOARD_HINTS.TOOLBAR_POINT }])
   }
   const target = elementAt(ctx, p, handOf(c, e.hand).hoverId)
   if (target && !ctx.state.held) return grabElement(setHand(c, e.hand, hand), e.hand, target, worldAt(ctx, p), ctx)
-  const mode = otherBusy || target ? 'idle' : 'pan'
-  return result(setHand(c, e.hand, { ...hand, mode }))
+  // Кулак на пустом месте доску не двигает: это делает жест двух пальцев.
+  if (target) return result(setHand(c, e.hand, { ...hand, mode: 'idle' }))
+  return result(setHand(c, e.hand, { ...withoutHover(hand), mode: 'grip', gripFrom: p }))
 }
 
 function grabElement(c: ControllerState, hand: HandId, el: BoardElement, w: Point, ctx: StepContext): StepResult {
@@ -166,7 +218,8 @@ function grabElement(c: ControllerState, hand: HandId, el: BoardElement, w: Poin
 }
 
 function endHand(c: ControllerState, hand: HandId): ControllerState {
-  const next = setHand(c, hand, { ...handOf(c, hand), mode: 'idle', closure: 0 })
+  const { gripFrom: _g, ...h } = handOf(c, hand)
+  const next = setHand(c, hand, { ...h, mode: 'idle', closure: 0 })
   const anyActive = Object.values(next.hands).some((h) => h?.mode !== 'idle')
   return anyActive ? next : { ...next, zooming: false }
 }
@@ -267,6 +320,8 @@ export function step(c: ControllerState, input: ControllerInput, ctx: StepContex
       return onPoint(c, input.e, ctx)
     case 'zoom':
       return onZoom(c, input.e, ctx)
+    case 'pan':
+      return onPan(c, input.e, ctx)
     case 'handlost':
       return onLost(c, input.e.hand, ctx)
     case 'consume':

@@ -9,6 +9,7 @@ export const CLOSURE_SHRINK = 0.4
  * Магнитный фокус: элемент рядом с рукой подсвечивает контур, а прицел почти исчезает.
  * Над кнопкой плашки вокруг точки появляется кольцо.
  * Пока рука держит элемент, прицел скрыт: за рукой следует сам элемент.
+ * Во время панорамы двумя пальцами прицел становится значком перемещения и стоит на месте.
  */
 export class CursorLayer {
   private readonly dots = new Map<HandId, HTMLElement>()
@@ -53,5 +54,7 @@ export class CursorLayer {
     dot.classList.toggle('is-over', !holding && h.hoverAction !== undefined)
     // Бездействие: пустое кольцо показывает, что рука сейчас ничего не делает.
     dot.classList.toggle('is-idle', !holding && h.engaged === false)
+    // Панорама: вместо горошины — значок перемещения, доска едет под ним.
+    dot.classList.toggle('is-pan', !holding && h.mode === 'pan')
   }
 }

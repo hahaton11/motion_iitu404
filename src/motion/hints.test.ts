@@ -55,6 +55,34 @@ describe('stepHints', () => {
     expect(runFor({ hands: [hand({ closure: 0.6, pinching: true })] }, 2000)).toEqual([])
   })
 
+  it('no HALF_RELEASE for a hand carrying an element with half-bent fingers', () => {
+    const carrying = hand({ closure: 0.6, phase: 'carrying', carry: { carrying: true, swingAt: undefined, slowThrowAt: undefined } })
+    expect(runFor({ hands: [carrying] }, 3000)).toEqual([])
+  })
+
+  it('HALF_RELEASE while the put click is half opened', () => {
+    const clicking = hand({ closure: 0.6, phase: 'clicking', carry: { carrying: true, swingAt: undefined, slowThrowAt: undefined } })
+    expect(codes(runFor({ hands: [clicking] }, 700))).toEqual(['HALF_RELEASE'])
+  })
+
+  it('CARRY_PUT_HOW after a few seconds of an open palm with the element', () => {
+    const open = hand({ closure: 0.1, phase: 'carrying', carry: { carrying: true, swingAt: undefined, slowThrowAt: undefined } })
+    const hs = runFor({ hands: [open] }, 4000)
+    expect(codes(hs)).toEqual(['CARRY_PUT_HOW'])
+    expect(hs[0]!.t).toBeGreaterThanOrEqual(3500)
+    expect(hs[0]!.message).toBe('Чтобы положить, сожми кулак и быстро раскрой ладонь')
+  })
+
+  it('CARRY_THROW_HOW right after a swing without the fist, once', () => {
+    const swung = hand({ closure: 0.1, phase: 'carrying', carry: { carrying: true, swingAt: 0, slowThrowAt: undefined } })
+    expect(codes(runFor({ hands: [swung] }, 3000))).toEqual(['CARRY_THROW_HOW'])
+  })
+
+  it('CARRY_THROW_SLOW after a slow click on the move', () => {
+    const slow = hand({ carry: { carrying: false, swingAt: undefined, slowThrowAt: 0 } })
+    expect(codes(runFor({ hands: [slow] }, 1000))).toEqual(['CARRY_THROW_SLOW'])
+  })
+
   it('HALF_RELEASE in the band while holding', () => {
     expect(codes(runFor({ hands: [hand({ closure: 0.6, phase: 'holding' })] }, 700))).toEqual(['HALF_RELEASE'])
   })

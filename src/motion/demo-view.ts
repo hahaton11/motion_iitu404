@@ -1,5 +1,6 @@
 import type { HandId, HintEvt } from '../contracts/input'
 import type { FrameInfo } from './camera-input'
+import { isHoldingPhase } from './hand-state'
 import type { HandDebug } from './pipeline'
 import type { Thresholds } from './types'
 
@@ -15,6 +16,8 @@ const PHASE_TEXT: Readonly<Record<string, string>> = {
   closing: 'closing, сжимается',
   holding: 'holding, держит',
   opening: 'opening, раскрывается',
+  carrying: 'carrying, несёт элемент',
+  clicking: 'clicking, кулак с элементом',
 }
 
 const html = String.raw
@@ -120,7 +123,7 @@ export class DemoView {
       cursor.style.display = 'none'
       return
     }
-    const holding = d.phase === 'holding' || d.phase === 'opening'
+    const holding = isHoldingPhase(d.phase)
     const pose = d.pose ? ` · поза ${d.pose}${d.detection.pose ? ` (${d.detection.pose.label} ${d.detection.pose.confidence.toFixed(2)})` : ''}` : ''
     set('phase', `${PHASE_TEXT[d.phase] ?? d.phase}${pose}${d.paused ? ' · пауза' : ''}`)
     set('closure', d.features.closure.toFixed(2))

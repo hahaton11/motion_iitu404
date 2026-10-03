@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { computeFeatures } from './features'
 import {
   initialHandState,
+  setCarry,
   stepHand,
   stepHandMissing,
   type HandEvent,
@@ -141,6 +142,124 @@ describe('stepHand throw', () => {
   })
 })
 
+/** Захват кулаком, потребитель подтвердил элемент, кулак раскрыт: рука несёт элемент. */
+const carrying = (x = 0.5): HandState => {
+  const grabbed = setCarry(runFrames(frames(repeat({ closure: 0.9, x }, 3))).state, true)
+  return runFrames(frames(repeat({ closure: 0.1, x }, 3), 3 * FRAME_MS), grabbed).state
+}
+
+/**
+ * Перенос прилипшего элемента. Кадры по 33 мс: окно щелчка PUT_WINDOW_MS = 600 мс — это 18 кадров
+ * от первого кадра кулака до первого кадра ладони.
+ */
+describe('stepHand carry', () => {
+  const FIST = { closure: 0.9 }
+  const OPEN = { closure: 0.1 }
+  const IDLE = { closure: 0.6 }
+
+  const after = (s: HandState): number => (s.lastSeen ?? 0) + FRAME_MS
+
+  it('keeps the element in hand when the grab fist opens', () => {
+    const s = carrying()
+    expect(s.phase).toBe('carrying')
+    const r = runFrames(frames([...repeat(OPEN, 30), ...repeat(IDLE, 30), ...repeat(OPEN, 10)], after(s)), s)
+    expect(r.events).toEqual([])
+    expect(r.state.phase).toBe('carrying')
+  })
+
+  it('opening the palm without a fist never releases', () => {
+    const s = carrying()
+    const jitter = Array.from({ length: 60 }, (_, i) => ({ closure: i % 7 < 3 ? 0.1 : 0.6 }))
+    expect(runFrames(frames(jitter, after(s)), s).events).toEqual([])
+  })
+
+  it('fist then a quick open in place releases', () => {
+    const s = carrying()
+    const r = runFrames(frames([...repeat(FIST, 6), ...repeat(OPEN, 3)], after(s)), s)
+    expect(types(r.events)).toEqual(['release'])
+    expect(r.state.phase).toBe('open')
+    expect(r.state.carry).toBe(false)
+  })
+
+  it('fist then a quick open on the move throws', () => {
+    const s = carrying(0.2)
+    const fist = repeat({ ...FIST, x: 0.2 }, 3)
+    const fling = [1, 2, 3].map((i) => ({ ...FIST, x: 0.2 + i * 0.12 }))
+    const open = [{ ...OPEN, x: 0.2 + 4 * 0.12 }]
+    const r = runFrames(frames([...fist, ...fling, ...open], after(s)), s)
+    const last = r.events[r.events.length - 1]!
+    expect(types(r.events)).toEqual(['throw'])
+    expect(last.type === 'throw' && last.vx).toBeGreaterThan(2.2)
+  })
+
+  it('a fast carry without the fist gesture does not throw and marks a swing', () => {
+    const s = carrying(0.1)
+    const sweep = Array.from({ length: 8 }, (_, i) => ({ ...OPEN, x: 0.1 + i * 0.12 }))
+    const r = runFrames(frames([...sweep, ...repeat({ ...OPEN, x: 0.94 }, 10)], after(s)), s)
+    expect(r.events).toEqual([])
+    expect(r.state.phase).toBe('carrying')
+    expect(r.state.swingAt).toBeDefined()
+  })
+
+  it('a fling right after the grab is a carry, not a throw', () => {
+    const grabbed = setCarry(runFrames(frames(repeat({ ...FIST, x: 0.2 }, 3))).state, true)
+    const fling = [1, 2, 3].map((i) => ({ ...OPEN, x: 0.2 + i * 0.12 }))
+    const r = runFrames(frames(fling, 3 * FRAME_MS), grabbed)
+    expect(r.events).toEqual([])
+    expect(r.state.phase).toBe('carrying')
+    expect(r.state.swingAt).toBeDefined()
+  })
+
+  it('a fist held past the window and then opened still releases, never throws', () => {
+    const s = carrying(0.2)
+    const longFist = repeat({ ...FIST, x: 0.2 }, 20)
+    const fling = [1, 2, 3].map((i) => ({ ...FIST, x: 0.2 + i * 0.12 }))
+    const open = [{ ...OPEN, x: 0.56 }]
+    const r = runFrames(frames([...longFist, ...fling, ...open, ...repeat({ ...OPEN, x: 0.56 }, 2)], after(s)), s)
+    expect(types(r.events)).toEqual(['release'])
+    expect(r.state.slowThrowAt).toBeDefined()
+  })
+
+  it('a slow click in place releases without the slow throw mark', () => {
+    const s = carrying()
+    const r = runFrames(frames([...repeat(FIST, 30), ...repeat(OPEN, 3)], after(s)), s)
+    expect(types(r.events)).toEqual(['release'])
+    expect(r.state.slowThrowAt).toBeUndefined()
+  })
+
+  it('a short fist flicker below GRAB_FRAMES does not arm the click', () => {
+    const s = carrying()
+    const r = runFrames(frames([...repeat(FIST, 2), ...repeat(OPEN, 5)], after(s)), s)
+    expect(r.events).toEqual([])
+    expect(r.state.phase).toBe('carrying')
+  })
+
+  it('a fist on empty space without carry is released by an open palm as before', () => {
+    const r = runFrames(frames([...repeat(FIST, 3), ...repeat(OPEN, 3)]))
+    expect(types(r.events)).toEqual(['grab', 'release'])
+  })
+
+  it('setCarry false frees a carrying hand silently', () => {
+    const s = setCarry(carrying(), false)
+    expect(s.phase).toBe('open')
+    expect(runFrames(frames(repeat(OPEN, 5), after(s)), s).events).toEqual([])
+  })
+
+  it('setCarry false with a clenched fist keeps the fist, so it does not grab again', () => {
+    const s = carrying()
+    const clenched = runFrames(frames(repeat(FIST, 4), after(s)), s).state
+    const freed = setCarry(clenched, false)
+    expect(freed.phase).toBe('holding')
+    const r = runFrames(frames([...repeat(FIST, 10), ...repeat(OPEN, 3)], after(freed)), freed)
+    expect(types(r.events)).toEqual(['release'])
+  })
+
+  it('setCarry true on a free hand starts carrying', () => {
+    const s = setCarry(runFrames(frames(repeat(OPEN, 3))).state, true)
+    expect(s.phase).toBe('carrying')
+  })
+})
+
 describe('stepHand point', () => {
   it('fires once after 600 ms of a still pointing pose', () => {
     const r = runFrames(frames(repeat({ closure: 0.7, indexOnly: true }, 40)))
@@ -179,6 +298,23 @@ describe('stepHandMissing', () => {
     const [first] = r.events
     expect(types(r.events)).toEqual(['throw', 'handlost'])
     expect(first?.type === 'throw' && first.vx).toBeGreaterThan(2.2)
+  })
+
+  it('drops a carried element in place when the hand is lost, even mid-sweep', () => {
+    const s = carrying(0.2)
+    const sweep = Array.from({ length: 5 }, (_, i) => ({ closure: 0.1, x: 0.2 + i * 0.12 }))
+    const moved = runFrames(frames(sweep, (s.lastSeen ?? 0) + FRAME_MS), s).state
+    const r = stepHandMissing(moved, (moved.lastSeen ?? 0) + 400)
+    expect(types(r.events)).toEqual(['release', 'handlost'])
+    expect(r.events[0]).toMatchObject({ vx: 0, vy: 0 })
+  })
+
+  it('finishes a quick click as a throw when the hand vanishes mid-fling', () => {
+    const s = carrying(0.2)
+    const fist = repeat({ closure: 0.9, x: 0.2 }, 3)
+    const fling = [1, 2, 3].map((i) => ({ closure: 0.9, x: 0.2 + i * 0.12 }))
+    const moved = runFrames(frames([...fist, ...fling], (s.lastSeen ?? 0) + FRAME_MS), s).state
+    expect(types(stepHandMissing(moved, (moved.lastSeen ?? 0) + 400).events)).toEqual(['throw', 'handlost'])
   })
 
   it('does nothing for a hand that was never seen', () => {

@@ -1,4 +1,5 @@
 import { HandLandmarker } from '@mediapipe/tasks-vision'
+import { isHoldingPhase } from './hand-state'
 import type { HandDebug } from './pipeline'
 
 /** Скелет руки поверх видео. Canvas зеркалится CSS вместе с видео, поэтому рисуем в координатах кадра. */
@@ -21,7 +22,7 @@ export function drawHands(ctx: CanvasRenderingContext2D, hands: readonly HandDeb
   ctx.clearRect(0, 0, w, h)
   hands.forEach((hand) => {
     const lm = hand.detection.landmarks
-    const holding = hand.phase === 'holding' || hand.phase === 'opening'
+    const holding = isHoldingPhase(hand.phase)
     const color = holding ? COLORS.holding : COLORS[hand.hand]
     ctx.strokeStyle = color
     ctx.fillStyle = color

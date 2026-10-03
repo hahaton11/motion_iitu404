@@ -7,15 +7,17 @@ import {
   DEFAULT_THRESHOLDS,
   handSpeed,
   initialHandState,
+  isFistPhase,
   isHoldingPhase,
   isPresent,
+  setCarry,
   stepHand,
   stepHandMissing,
   type HandEvent,
   type HandPhase,
   type HandState,
 } from './hand-state'
-import { initialHints, stepHints, type HintHandInput, type HintState } from './hints'
+import { initialHints, stepHints, type CarryInfo, type HintHandInput, type HintState } from './hints'
 import { initialSwipe, resetSwipe, stepSwipe, type SwipeOutcome, type SwipeState } from './swipe'
 import { DEFAULT_VOTER, initialVoter, MOVING_SPEED, stepVoter, type VoterState } from '../gestures/voter'
 import type { Pose } from '../gestures/model'
@@ -93,6 +95,8 @@ export interface HandDebug {
   readonly zooming: boolean
   /** Классификатор видит щипок, но неуверенно: для подсказки. */
   readonly nearPinch: boolean
+  /** Перенос прилипшего элемента: для подсказок. */
+  readonly carry: CarryInfo
 }
 
 export interface FrameResult {
@@ -131,6 +135,18 @@ export const withThresholds = (s: PipelineState, thresholds: Thresholds): Pipeli
 
 export const withPointerBox = (s: PipelineState, box: PointerBox): PipelineState => ({ ...s, box })
 
+/**
+ * Ответ потребителя: держит ли рука элемент. true — захват прилипает, раскрытая ладонь не отпускает.
+ * false — элемент ушёл из руки без жеста (карман, удаление): рука свободна, release не шлётся.
+ */
+export function withCarrying(s: PipelineState, hand: HandId, carrying: boolean): PipelineState {
+  const track = s.hands[hand]
+  const machine = setCarry(track.machine, carrying)
+  if (machine === track.machine) return s
+  const emittedHolding = carrying || (isHoldingPhase(machine.phase) && track.emittedHolding)
+  return { ...s, hands: { ...s.hands, [hand]: { ...track, machine, emittedHolding } } }
+}
+
 interface HandStep {
   readonly track: HandTrack
   readonly machineEvents: readonly HandEvent[]
@@ -149,7 +165,8 @@ const atCursor = (e: HandEvent, p: Vec2): HandEvent => (e.type === 'handlost' ? 
 /**
  * Поза → вход машины захвата. Бездействие даёт closure между порогами: состояние не меняется.
  * Захват берёт только кулак. Щипок зумит доску и захвата не меняет: свободная рука щипком ничего
- * не берёт, а рука, которая несёт элемент, не роняет его, если кулак на ходу перешёл в щипок.
+ * не берёт. Рука, которая несёт элемент, держит его в любой позе: положить его может только
+ * щелчок кулак → ладонь, а щипок и два пальца с элементом в руке не зумят и не двигают доску.
  */
 const POSE_SHAPE: Readonly<Record<Pose, { closure: number; indexOnly: boolean }>> = {
   fist: { closure: 1, indexOnly: false },
@@ -208,6 +225,7 @@ function stepSeen(track: HandTrack, det: HandDetection, t: number, th: Threshold
     nearPan: pf.nearPan.near,
     zooming,
     nearPinch: zf.nearPinch.near,
+    carry: { carrying: r.state.carry, swingAt: r.state.swingAt, slowThrowAt: r.state.slowThrowAt },
     ...(pose ? { pose } : {}),
   }
   const machineEvents = r.events.map((e) => atCursor(e, screen))
@@ -305,8 +323,11 @@ function reconcile(hand: HandId, track: HandTrack): { track: HandTrack; out: Out
   return { track: { ...track, emittedHolding: holding }, out: [out] }
 }
 
-const snapshot = (step: HandStep): HandSnapshot | undefined =>
-  step.debug ? { x: step.debug.screen.x, y: step.debug.screen.y, holding: isHoldingPhase(step.track.machine.phase) } : undefined
+/** Зум двумя руками ведут только кулаки без элемента: рука, несущая элемент, щелчком его кладёт. */
+const snapshot = (step: HandStep): HandSnapshot | undefined => {
+  const m = step.track.machine
+  return step.debug ? { x: step.debug.screen.x, y: step.debug.screen.y, holding: isFistPhase(m.phase) && !m.carry } : undefined
+}
 
 function cursorOf(d: HandDebug, track: HandTrack): OutEvent {
   const e = {
@@ -337,6 +358,7 @@ function hintInputs(debug: readonly HandDebug[]): HintHandInput[] {
     nearPan: d.nearPan,
     nearPinch: d.nearPinch,
     pinching: d.pose === PINCH_POSE || d.detection.pose?.label === PINCH_POSE,
+    carry: d.carry,
   }))
 }
 

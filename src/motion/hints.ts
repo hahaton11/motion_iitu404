@@ -5,6 +5,8 @@ import {
   HALF_GESTURE_MS,
   NEAR_PAN_HINT_MS,
   NEAR_PINCH_HINT_MS,
+  CARRY_OPEN_HINT_MS,
+  CARRY_FLASH_MS,
   HINT_COOLDOWN_MS,
   HINT_GAP_MS,
   NO_HAND_MS,
@@ -13,13 +15,24 @@ import {
   POOR_TRACKING_MS,
   POOR_TRACKING_SCORE,
 } from './constants'
-import { isHoldingPhase, type HandPhase } from './hand-state'
+import { isFistPhase, isHoldingPhase, type HandPhase } from './hand-state'
 import { edgeDistance } from './landmarks'
 import type { Thresholds, Vec2 } from './types'
 
 /** Детектор подсказок режима «ошибка»: условие должно продержаться, один код не чаще раза в 3 секунды. */
 
-export const HINT_TEXTS: Readonly<Record<MotionHintCode, Pick<HintEvt, 'message' | 'severity'>>> = {
+/**
+ * Подсказки переноса прилипшего элемента. Коды свои, не из контракта: поле `code` подсказки
+ * принимает любую строку, а контракт без нужды не меняется.
+ */
+export type CarryHintCode = 'CARRY_PUT_HOW' | 'CARRY_THROW_HOW' | 'CARRY_THROW_SLOW'
+
+type HintCode = MotionHintCode | CarryHintCode
+
+export const HINT_TEXTS: Readonly<Record<HintCode, Pick<HintEvt, 'message' | 'severity'>>> = {
+  CARRY_PUT_HOW: { message: 'Чтобы положить, сожми кулак и быстро раскрой ладонь', severity: 'info' },
+  CARRY_THROW_HOW: { message: 'Чтобы выбросить, сожми кулак и раскрой ладонь на ходу', severity: 'info' },
+  CARRY_THROW_SLOW: { message: 'Чтобы выбросить, раскрой ладонь сразу после кулака, не задерживая его', severity: 'warn' },
   HALF_GRAB: { message: 'Сожми кулак полностью, чтобы взять', severity: 'warn' },
   HALF_RELEASE: { message: 'Раскрой ладонь шире, чтобы отпустить', severity: 'warn' },
   HALF_PAN: { message: 'Выпрями указательный и средний, остальные согни', severity: 'warn' },
@@ -32,6 +45,16 @@ export const HINT_TEXTS: Readonly<Record<MotionHintCode, Pick<HintEvt, 'message'
   SWIPE_SHORT: { message: 'Махни шире, примерно на полруки, чтобы перейти', severity: 'info' },
   SWIPE_DIAGONAL: { message: 'Махни строго вбок или строго вверх-вниз', severity: 'info' },
   NO_HAND: { message: 'Подними руку перед камерой, ладонью к экрану', severity: 'info' },
+}
+
+/** Что машина знает о несомом элементе. Отметки времени — последние кадры, где случилось событие. */
+export interface CarryInfo {
+  /** Рука несёт прилипший элемент. */
+  readonly carrying: boolean
+  /** Мах с элементом без жеста кулака. */
+  readonly swingAt: number | undefined
+  /** Медленный щелчок на ходу положил элемент, а не выбросил. */
+  readonly slowThrowAt: number | undefined
 }
 
 export interface HintHandInput {
@@ -51,6 +74,7 @@ export interface HintHandInput {
    * кулак: без этого флага зум щипком просил бы «сожми кулак полностью».
    */
   readonly pinching?: boolean
+  readonly carry?: CarryInfo
 }
 
 export interface HintInput {
@@ -73,7 +97,7 @@ export interface HintState {
 }
 
 interface Condition {
-  readonly code: MotionHintCode
+  readonly code: HintCode
   readonly hand: HandId | undefined
   readonly active: boolean
   readonly holdMs: number
@@ -89,7 +113,7 @@ interface Condition {
  * и размер ладони, из которого считается расстояние, там завышен. И только потом расстояние,
  * полужесты и скорость.
  */
-const PRIORITY: readonly MotionHintCode[] = [
+const PRIORITY: readonly HintCode[] = [
   'NO_HAND',
   'POOR_TRACKING',
   'HAND_NEAR_EDGE',
@@ -99,26 +123,52 @@ const PRIORITY: readonly MotionHintCode[] = [
   'HALF_GRAB',
   'HALF_PAN',
   'HALF_PINCH',
+  'CARRY_THROW_SLOW',
+  'CARRY_THROW_HOW',
+  'CARRY_PUT_HOW',
   'MOVING_TOO_FAST',
   'SWIPE_SHORT',
   'SWIPE_DIAGONAL',
 ]
 
-const rankOf = (c: MotionHintCode): number => {
+const rankOf = (c: HintCode): number => {
   const i = PRIORITY.indexOf(c)
   return i < 0 ? PRIORITY.length : i
 }
 
 export const initialHints = (): HintState => ({ lastSent: {}, since: {}, lastHandAt: undefined, lastAnyAt: undefined })
 
-function handConditions(h: HintHandInput, th: Thresholds): Condition[] {
+const recent = (at: number | undefined, t: number): boolean => at !== undefined && t - at <= CARRY_FLASH_MS
+
+/**
+ * Подсказки переноса. Ладонь с элементом раскрыта долго — человек ждёт, что элемент упадёт сам.
+ * Мах без кулака — пытается бросить по-старому. Медленный щелчок на махе — бросок не засчитан.
+ */
+function carryConditions(h: HintHandInput, th: Thresholds, t: number): Condition[] {
+  const k = h.carry
+  const c = (code: CarryHintCode, active: boolean, holdMs: number): Condition => ({ code, hand: h.hand, active, holdMs })
+  return [
+    c('CARRY_PUT_HOW', h.phase === 'carrying' && h.closure < th.open, CARRY_OPEN_HINT_MS),
+    c('CARRY_THROW_HOW', recent(k?.swingAt, t), 0),
+    c('CARRY_THROW_SLOW', recent(k?.slowThrowAt, t), 0),
+  ]
+}
+
+/**
+ * «Раскрой ладонь шире» нужна там, где раскрытие что-то делает: кулак без элемента и щелчок,
+ * которым кладут. Рука, несущая элемент, бывает в любой позе, и полусогнутые пальцы там — норма.
+ */
+const releasing = (h: HintHandInput): boolean => h.phase === 'clicking' || (isFistPhase(h.phase) && h.carry?.carrying !== true)
+
+function handConditions(h: HintHandInput, th: Thresholds, t: number): Condition[] {
   const inBand = h.closure >= th.open && h.closure <= th.hold
   const holding = isHoldingPhase(h.phase)
   const nearEdge = edgeDistance(h.center) < EDGE_HINT_MARGIN
   const c = (code: MotionHintCode, active: boolean, holdMs: number): Condition => ({ code, hand: h.hand, active, holdMs })
   return [
+    ...carryConditions(h, th, t),
     c('HALF_GRAB', inBand && !holding && h.pinching !== true, HALF_GESTURE_MS),
-    c('HALF_RELEASE', inBand && holding, HALF_GESTURE_MS),
+    c('HALF_RELEASE', inBand && releasing(h), HALF_GESTURE_MS),
     c('HALF_PAN', h.nearPan === true, NEAR_PAN_HINT_MS),
     c('HALF_PINCH', h.nearPinch === true, NEAR_PINCH_HINT_MS),
     c('HAND_NEAR_EDGE', nearEdge, GEOMETRY_HINT_MS),
@@ -131,7 +181,7 @@ function handConditions(h: HintHandInput, th: Thresholds): Condition[] {
 }
 
 function conditions(input: HintInput): Condition[] {
-  const perHand = input.hands.flatMap((h) => handConditions(h, input.thresholds))
+  const perHand = input.hands.flatMap((h) => handConditions(h, input.thresholds, input.t))
   const fast = input.lostFast.map((hand): Condition => ({ code: 'MOVING_TOO_FAST', hand, active: true, holdMs: 0 }))
   const noHand: Condition = { code: 'NO_HAND', hand: undefined, active: input.hands.length === 0, holdMs: NO_HAND_MS }
   return [...perHand, ...fast, noHand]

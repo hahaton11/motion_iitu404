@@ -38,6 +38,7 @@ const ICON_BY_PREFIX: readonly (readonly [string, GestureIcon])[] = [
   ['TUT_THROW', 'throw'],
   ['TUT_PUT', 'pocket'],
   ['TUT_OPEN', 'pocket'],
+  ['TUT_VOICE', 'point'],
   ['TUT_', 'fist'],
   ['VOICE_', 'voice'],
   ['POCKET_', 'pocket'],

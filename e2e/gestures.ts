@@ -109,3 +109,16 @@ export async function takeFromPocket(page: Page, index = 0): Promise<Point> {
   await page.mouse.down()
   return at
 }
+
+/** Удержание Shift с кнопкой дольше POINT_HOLD_MS эмулятора: жест «указать пальцем». */
+const POINT_HOLD_WAIT_MS = 900
+
+/** Указать пальцем и задержать: выбирает стикер и начинает диктовку. */
+export async function pointAt(page: Page, at: Point): Promise<void> {
+  await page.mouse.move(at.x, at.y)
+  await page.keyboard.down('Shift')
+  await page.mouse.down()
+  await wait(POINT_HOLD_WAIT_MS)
+  await page.mouse.up()
+  await page.keyboard.up('Shift')
+}

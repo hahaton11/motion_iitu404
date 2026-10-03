@@ -1,9 +1,9 @@
 import { expect, test, type Page } from '@playwright/test'
 import { CLUSTERS, IDEAS, TRASH_TITLE, ideaElementId, type IdeaTarget } from '../src/app/challenge'
 import { TUTORIAL_STEPS } from '../src/app/tutorial'
-import { centerOf, drag, fling, glide, takeFromPocket, type Point } from './gestures'
+import { centerOf, drag, fling, glide, pointAt, takeFromPocket, type Point } from './gestures'
 
-/** Смоук на MouseInput: старт → обучение из четырёх шагов → челлендж → финал. */
+/** Смоук на MouseInput: старт → обучение из пяти шагов → челлендж → финал. */
 
 /**
  * Названия берутся из кода, а не выписываются здесь второй раз: выписанная копия расходится
@@ -35,27 +35,40 @@ async function slotIn(page: Page, target: IdeaTarget, slot: number): Promise<Poi
   return { x: box.x + box.width * (0.5 + dx), y: box.y + box.height * 0.6 }
 }
 
+const stepLabel = (n: number) => `Шаг ${n} из ${TUTORIAL_STEPS.length}`
+/** Диктовка заканчивается сама паузой или таймаутом старта, если речь не распознаётся. */
+const DICTATION_MS = 12_000
+
 async function passTutorial(page: Page): Promise<void> {
   const progress = page.locator('.app-tut-progress')
   const practice = (label: string) => page.locator('[data-id="tut-practice"]', { hasText: label })
-  await expect(progress).toHaveText('Шаг 1 из 4')
+  await expect(progress).toHaveText(stepLabel(1))
   await drag(page, await centerOf(practice(spawnTextOf('move'))), await centerOf(page.locator('.app-zone')))
-  await expect(progress).toHaveText('Шаг 2 из 4')
+  await expect(progress).toHaveText(stepLabel(2))
 
   await expect(practice(spawnTextOf('throw'))).toBeVisible()
   await page.waitForTimeout(SPAWN_MS)
   await fling(page, await centerOf(practice(spawnTextOf('throw'))))
-  await expect(progress).toHaveText('Шаг 3 из 4')
+  await expect(progress).toHaveText(stepLabel(3))
 
   const taken = await takeFromPocket(page)
-  await expect(progress).toHaveText('Шаг 4 из 4')
+  await expect(progress).toHaveText(stepLabel(4))
   const vp = page.viewportSize()
   const mid = { x: taken.x, y: (vp?.height ?? 0) * 0.55 }
   const inPocket = { x: taken.x, y: (vp?.height ?? 0) * 0.95 }
   await glide(page, taken, mid)
   await glide(page, mid, inPocket)
   await page.mouse.up()
-  await expect(page.locator('.app-tut.is-done')).toBeVisible()
+
+  await expect(progress).toHaveText(stepLabel(5))
+  const sticky = practice(spawnTextOf('voice'))
+  await expect(sticky).toBeVisible()
+  await page.waitForTimeout(SPAWN_MS)
+  const at = await centerOf(sticky)
+  await glide(page, mid, at)
+  await expect(page.locator('.vc-tip.is-on')).toContainText('Shift')
+  await pointAt(page, at)
+  await expect(page.locator('.app-tut.is-done')).toBeVisible({ timeout: DICTATION_MS })
 }
 
 async function sortIdeas(page: Page): Promise<void> {

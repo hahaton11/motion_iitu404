@@ -14,14 +14,14 @@ const run = (s: TutorialState, ...events: TutorialEvent[]): TutorialState =>
   events.reduce((acc, e) => stepTutorial(acc, e).state, s)
 
 describe('tutorial', () => {
-  it('has four steps in the order of the spec', () => {
-    expect(TUTORIAL_STEPS.map((s) => s.id)).toEqual(['move', 'throw', 'take', 'put'])
+  it('has five steps, dictation last', () => {
+    expect(TUTORIAL_STEPS.map((s) => s.id)).toEqual(['move', 'throw', 'take', 'put', 'voice'])
   })
 
   it('passes all steps with the right actions and finishes', () => {
-    const s = run(initialTutorial(), { type: 'drop', inFrame: true }, { type: 'throw' }, { type: 'take' })
-    expect(currentStep(s)?.id).toBe('put')
-    const last = stepTutorial(s, { type: 'put' })
+    const s = run(initialTutorial(), { type: 'drop', inFrame: true }, { type: 'throw' }, { type: 'take' }, { type: 'put' })
+    expect(currentStep(s)?.id).toBe('voice')
+    const last = stepTutorial(s, { type: 'dictated' })
     expect(last.reaction).toEqual({ kind: 'finish' })
     expect(last.state.done).toBe(true)
   })
@@ -60,17 +60,35 @@ describe('tutorial', () => {
     expect(stepTutorial(s, { type: 'drop', inFrame: false }).reaction).toMatchObject({ hint: TUTORIAL_HINTS.PUT_LOWER })
   })
 
+  it('voice step: a fist hints to point instead, dictation passes', () => {
+    const s = run(initialTutorial(), { type: 'skip' }, { type: 'skip' }, { type: 'skip' }, { type: 'skip' })
+    expect(currentStep(s)?.id).toBe('voice')
+    expect(stepTutorial(s, { type: 'grab' }).reaction).toMatchObject({ hint: TUTORIAL_HINTS.VOICE_POINT, respawn: false })
+    expect(stepTutorial(s, { type: 'throw' }).reaction).toMatchObject({ hint: TUTORIAL_HINTS.VOICE_POINT, respawn: true })
+    expect(stepTutorial(s, { type: 'dictated' }).reaction).toEqual({ kind: 'finish' })
+  })
+
+  it('dictation outside the voice step changes nothing', () => {
+    expect(stepTutorial(initialTutorial(), { type: 'dictated' }).reaction).toEqual({ kind: 'none' })
+  })
+
+  it('voice step tells how to start dictation with the hand and the mouse', () => {
+    const step = TUTORIAL_STEPS.find((s) => s.id === 'voice')
+    expect(step?.instruction).toMatch(/пальцем/)
+    expect(step?.note).toMatch(/Shift/)
+  })
+
   it('skip moves on and resets mistakes; after the end events are ignored', () => {
     const s = run(initialTutorial(), { type: 'throw' }, { type: 'skip' })
     expect(s).toEqual({ index: 1, done: false, mistakes: 0 })
-    const done = run(s, { type: 'skip' }, { type: 'skip' }, { type: 'skip' })
+    const done = run(s, { type: 'skip' }, { type: 'skip' }, { type: 'skip' }, { type: 'skip' })
     expect(done.done).toBe(true)
     expect(stepTutorial(done, { type: 'skip' }).state).toBe(done)
   })
 
   it('progress label', () => {
-    expect(progressLabel(initialTutorial())).toBe('Шаг 1 из 4')
-    expect(progressLabel({ index: 4, done: true, mistakes: 0 })).toBe('Шаг 4 из 4')
+    expect(progressLabel(initialTutorial())).toBe('Шаг 1 из 5')
+    expect(progressLabel({ index: 5, done: true, mistakes: 0 })).toBe('Шаг 5 из 5')
   })
 
   it('every hint message tells what to do and has an app code', () => {

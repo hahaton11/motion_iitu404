@@ -2,11 +2,11 @@ import type { HintEvt } from '../contracts/input'
 import { rect, type WorldPoint, type WorldRect } from './zones'
 
 /**
- * Обучение из четырёх шагов. Каждый шаг ждёт правильного действия, на ошибку отвечает подсказкой.
+ * Обучение из пяти шагов. Каждый шаг ждёт правильного действия, на ошибку отвечает подсказкой.
  * Чистый редьюсер: события доски и кармана приходят снаружи, реакция возвращается экрану.
  */
 
-export type TutorialStepId = 'move' | 'throw' | 'take' | 'put'
+export type TutorialStepId = 'move' | 'throw' | 'take' | 'put' | 'voice'
 
 /** Иконка жеста для карточки шага и подсказки. */
 export type GestureIcon = 'fist' | 'palm' | 'throw' | 'point' | 'victory' | 'pocket' | 'voice' | 'hand' | 'light'
@@ -61,6 +61,15 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
     spawn: { x: -40, y: -30 },
     spawnText: 'Положи меня в карман',
   },
+  {
+    id: 'voice',
+    title: 'Продиктуй текст',
+    instruction: 'Укажи пальцем на стикер и задержи, а когда появится плашка «Говори» — скажи идею вслух',
+    note: 'С мышью: Shift и удержание кнопки на стикере. Замолчи на полторы секунды — текст запишется',
+    icon: 'voice',
+    spawn: { x: -40, y: -30 },
+    spawnText: 'Скажи сюда идею',
+  },
 ]
 
 export const TUTORIAL_HINTS = {
@@ -72,6 +81,11 @@ export const TUTORIAL_HINTS = {
   OPEN_POCKET: { code: 'TUT_OPEN_POCKET', message: 'Задержи открытую ладонь над карманом внизу, чтобы он открылся', severity: 'info' },
   PUT_NO_THROW: { code: 'TUT_PUT_NO_THROW', message: 'Не бросай: опусти элемент в карман и раскрой ладонь', severity: 'warn' },
   PUT_LOWER: { code: 'TUT_PUT_LOWER', message: 'Опусти элемент ниже, в карман внизу экрана', severity: 'info' },
+  VOICE_POINT: {
+    code: 'TUT_VOICE_POINT',
+    message: 'Не сжимай кулак: укажи на стикер пальцем и задержи, чтобы диктовать',
+    severity: 'info',
+  },
 } as const satisfies Record<string, HintEvt>
 
 export type TutorialEvent =
@@ -81,6 +95,8 @@ export type TutorialEvent =
   | { readonly type: 'throw' }
   | { readonly type: 'put' }
   | { readonly type: 'take' }
+  /** Диктовка в стикер закончилась или голос недоступен, а стикер выбран жестом диктовки. */
+  | { readonly type: 'dictated' }
   | { readonly type: 'skip' }
 
 export interface TutorialState {
@@ -118,6 +134,7 @@ const RULES: Readonly<Record<TutorialStepId, Rules>> = {
   throw: { throw: 'ok', drop: hint(TUTORIAL_HINTS.THROW_FASTER), put: hint(TUTORIAL_HINTS.THROW_NOT_POCKET, true) },
   take: { take: 'ok', grab: hint(TUTORIAL_HINTS.OPEN_POCKET) },
   put: { put: 'ok', throw: hint(TUTORIAL_HINTS.PUT_NO_THROW, true), drop: hint(TUTORIAL_HINTS.PUT_LOWER) },
+  voice: { dictated: 'ok', grab: hint(TUTORIAL_HINTS.VOICE_POINT), throw: hint(TUTORIAL_HINTS.VOICE_POINT, true) },
 }
 
 function ruleFor(step: TutorialStep, e: TutorialEvent): TutorialReaction | 'ok' {

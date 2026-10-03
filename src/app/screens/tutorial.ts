@@ -15,7 +15,7 @@ import {
 import { addDecor, createWorkspace, ensurePresets, workspaceDeps, type Workspace } from '../workspace'
 import { centerIn } from '../zones'
 
-/** Обучение: четыре шага на настоящей доске с карманом. Карточка шага сверху, шаг пропускается ладонью. */
+/** Обучение: пять шагов на настоящей доске с карманом. Карточка шага сверху, шаг пропускается ладонью. */
 
 const RESPAWN_MS = 650
 const FINISH_MS = 1400
@@ -118,6 +118,11 @@ export function mountTutorial(ctx: AppContext): ScreenHandle {
     ),
     ws.board.on('drop', ({ element }) => dispatch({ type: 'drop', inFrame: centerIn(TUTORIAL_FRAME, element) })),
     ws.board.on('throw', () => dispatch({ type: 'throw' })),
+    ws.voice.on('end', () => dispatch({ type: 'dictated' })),
+    // Без распознавания речи диктовка не начнётся: шаг засчитывается за сам жест выбора стикера.
+    ws.board.on('select', ({ id }) => {
+      if (id && !ws.voice.supported) dispatch({ type: 'dictated' })
+    }),
     ws.pocket.on('put', () => dispatch({ type: 'put' })),
     ws.pocket.on('take', () => {
       tookAt = performance.now()

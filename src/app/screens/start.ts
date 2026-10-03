@@ -14,7 +14,7 @@ const STATUS_TEXT: Readonly<Record<CameraStatus['phase'], string>> = {
 }
 
 export const MOUSE_HELP =
-  'Мышь вместо рук: зажми левую кнопку — кулак, отпусти — ладонь, резкий бросок — удалить, Shift и удержание — указать пальцем, правая кнопка — двигать доску'
+  'Мышь вместо рук: зажми левую кнопку — кулак, отпусти — ладонь, резкий бросок — удалить, Shift и удержание — указать пальцем, правая кнопка — двигать доску, Alt и ход вверх-вниз — масштаб'
 
 function modeSwitch(ctx: AppContext, onChange: () => void): { node: HTMLElement; sync: () => void } {
   const make = (mode: InputMode, label: string) =>

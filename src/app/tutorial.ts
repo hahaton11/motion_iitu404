@@ -9,7 +9,7 @@ import { rect, type WorldPoint, type WorldRect } from './zones'
 export type TutorialStepId = 'move' | 'throw' | 'take' | 'put' | 'voice'
 
 /** Иконка жеста для карточки шага и подсказки. */
-export type GestureIcon = 'fist' | 'palm' | 'throw' | 'point' | 'victory' | 'pocket' | 'voice' | 'hand' | 'light'
+export type GestureIcon = 'fist' | 'palm' | 'throw' | 'point' | 'victory' | 'zoom' | 'pocket' | 'voice' | 'hand' | 'light'
 
 export interface TutorialStep {
   readonly id: TutorialStepId
@@ -30,8 +30,8 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
   {
     id: 'move',
     title: 'Возьми и перенеси',
-    instruction: 'Сожми кулак или щипок на сообщении, перенеси его в рамку справа и раскрой ладонь',
-    note: 'Под сообщением появится тень — значит оно у тебя в руке',
+    instruction: 'Сожми кулак на сообщении, перенеси его в рамку справа и раскрой ладонь',
+    note: 'Берёт только кулак. Под сообщением появится тень — значит оно у тебя в руке',
     icon: 'fist',
     spawn: { x: -300, y: -30 },
     spawnText: 'Перенеси меня в рамку',

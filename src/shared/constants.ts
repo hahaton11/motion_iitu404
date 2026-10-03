@@ -35,3 +35,9 @@ export const POINT_HOLD_MS = 600
 
 /** Окно, по которому считается скорость руки или мыши. */
 export const VELOCITY_WINDOW_MS = 80
+
+/**
+ * Эмуляция зума щипком мышью: Alt и перетаскивание вверх или вниз. factor = exp(-dy * gain),
+ * dy в долях экрана. Совпадает с усилением зума щипком у камеры: мышь учит тому же движению.
+ */
+export const MOUSE_PINCH_ZOOM_GAIN = 2.5

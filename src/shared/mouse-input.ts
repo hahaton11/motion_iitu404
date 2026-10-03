@@ -1,5 +1,5 @@
 import type { InputSource, SwipeDir } from '../contracts/input'
-import { POINT_HOLD_MS, THROW_SPEED } from './constants'
+import { MOUSE_PINCH_ZOOM_GAIN, POINT_HOLD_MS, THROW_SPEED } from './constants'
 import { InputEmitter } from './emitter'
 import { VelocityTracker, speedOf } from './velocity'
 
@@ -13,7 +13,8 @@ const ARROWS: Readonly<Record<string, SwipeDir>> = { ArrowLeft: 'left', ArrowRig
  * Эмулятор жестов мышью с тем же контрактом, что у камеры.
  * ЛКМ = grab/release, резкий бросок = throw, колесо = zoom, Shift+ЛКМ удержание = point, стрелки = взмахи.
  * Перетаскивание средней или правой кнопкой, либо ЛКМ с зажатым пробелом = pan, как жест двух пальцев.
- * Рука всегда 'right'.
+ * Alt + перетаскивание ЛКМ вверх или вниз = zoom, как щипок: курсор стоит в точке нажатия, вокруг неё
+ * масштабируется доска, вверх — ближе, вниз — дальше. Рука всегда 'right'.
  */
 export class MouseInput implements InputSource {
   private readonly em = new InputEmitter()
@@ -21,6 +22,8 @@ export class MouseInput implements InputSource {
   private holding = false
   /** Где была мышь на прошлом событии панорамы. undefined — панорамы нет. */
   private panFrom: { x: number; y: number } | undefined
+  /** Зум щипком: центр масштаба и y мыши на прошлом событии. undefined — зума нет. */
+  private pinch: { cx: number; cy: number; y: number } | undefined
   private space = false
   private pointTimer: ReturnType<typeof setTimeout> | undefined
   private readonly disposers: Array<() => void> = []
@@ -36,6 +39,7 @@ export class MouseInput implements InputSource {
     this.listen('wheel', (e) => this.onWheel(e as WheelEvent), { passive: false })
     this.listen('pointerleave', () => {
       this.panFrom = undefined
+      this.pinch = undefined
       this.em.emit('handlost', { hand: 'right' })
     })
     this.listen('contextmenu', (e) => e.preventDefault())
@@ -78,6 +82,10 @@ export class MouseInput implements InputSource {
   private onMove(e: PointerEvent): void {
     const { x, y } = this.norm(e)
     this.vel = this.vel.push(x, y, e.timeStamp)
+    if (this.pinch) {
+      this.movePinch(y)
+      return
+    }
     const from = this.panFrom
     if (from) {
       this.emitCursor(x, y)
@@ -88,9 +96,19 @@ export class MouseInput implements InputSource {
     this.emitCursor(x, y)
   }
 
+  /** Курсор стоит в центре масштаба, доска масштабируется по вертикальному ходу мыши, горизонталь не в счёт. */
+  private movePinch(y: number): void {
+    const pinch = this.pinch
+    if (!pinch) return
+    this.emitCursor(pinch.cx, pinch.cy)
+    this.pinch = { ...pinch, y }
+    if (y !== pinch.y) this.em.emit('zoom', { factor: Math.exp(-(y - pinch.y) * MOUSE_PINCH_ZOOM_GAIN), cx: pinch.cx, cy: pinch.cy })
+  }
+
   private emitCursor(x: number, y: number): void {
     const panning = this.panFrom ? { panning: true } : {}
-    this.em.emit('cursor', { hand: 'right', x, y, closure: this.holding ? 1 : 0, holding: this.holding, ...panning })
+    const zooming = this.pinch ? { zooming: true } : {}
+    this.em.emit('cursor', { hand: 'right', x, y, closure: this.holding ? 1 : 0, holding: this.holding, ...panning, ...zooming })
   }
 
   private onDown(e: PointerEvent): void {
@@ -103,6 +121,12 @@ export class MouseInput implements InputSource {
       return
     }
     if (e.button !== LEFT_BUTTON) return
+    if (e.altKey && !this.holding) {
+      e.preventDefault()
+      this.pinch = { cx: x, cy: y, y }
+      this.emitCursor(x, y)
+      return
+    }
     if (e.shiftKey) {
       this.pointTimer = setTimeout(() => this.em.emit('point', { hand: 'right', x, y }), POINT_HOLD_MS)
       return
@@ -113,6 +137,12 @@ export class MouseInput implements InputSource {
 
   private onUp(e: PointerEvent): void {
     clearTimeout(this.pointTimer)
+    if (this.pinch) {
+      this.pinch = undefined
+      const { x, y } = this.norm(e)
+      this.emitCursor(x, y)
+      return
+    }
     if (this.panFrom) {
       this.panFrom = undefined
       const { x, y } = this.norm(e)

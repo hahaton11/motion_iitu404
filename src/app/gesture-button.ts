@@ -74,8 +74,8 @@ export class GestureButtons {
   }
 
   private onCursor(e: CursorEvt): void {
-    // Курсор панорамы стоит на месте, пока доска едет: задержка на кнопке тут не нажатие.
-    const closure = e.panning === true ? 1 : e.closure
+    // Курсор панорамы и зума стоит на месте, пока доска двигается: задержка на кнопке тут не нажатие.
+    const closure = e.panning === true || e.zooming === true ? 1 : e.closure
     this.cursors.set(e.hand, { x: e.x * window.innerWidth, y: e.y * window.innerHeight, closure })
     this.update(performance.now())
   }

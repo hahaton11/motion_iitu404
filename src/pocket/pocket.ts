@@ -179,7 +179,7 @@ export class PocketController implements Pocket {
     const carrying = this.board.getHeld()?.hand === e.hand
     const prev = this.hands.get(e.hand)?.zone ?? initialZone()
     const fanTop = fanRegionTop(this.slots(vp), vp)
-    const input = { type: 'cursor', x: e.x, y: e.y, closure: e.closure, carrying, fist: e.holding || e.panning === true, t: performance.now() } as const
+    const input = { type: 'cursor', x: e.x, y: e.y, closure: e.closure, carrying, fist: e.holding || e.panning === true || e.zooming === true, t: performance.now() } as const
     const r = this.prep ? { zone: initialZone(), events: [] } : stepZone(prev, input, { fanTop })
     this.hands.set(e.hand, { zone: r.zone, x: e.x, y: e.y, carrying })
     this.handleEvents(r.events)
